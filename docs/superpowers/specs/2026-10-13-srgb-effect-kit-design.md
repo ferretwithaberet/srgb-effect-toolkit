@@ -80,7 +80,7 @@ Prior art: `/home/ferret/Projects/Github/butterchurn-srgb` (hand-written `signal
 
 ### 3.2 From the user / SignalRGB developers (not in docs)
 
-- `on<Prop>Changed` globals are called by SignalRGB when a property changes. butterchurn-srgb depends on this.
+- `on<Prop>Changed` globals are called by SignalRGB when a property changes. They are also called once at load: butterchurn-srgb, which the user verified in real SignalRGB, applies initial state only inside these handlers. Exact order and timing will be confirmed in a later probe pass.
 - Users choose the renderer: **UltraLight** or **QtWebEngine**.
 - SignalRGB has an FPS setting (20–60). Effects likely do not receive it.
   - UltraLight's rAF follows the setting.
@@ -90,7 +90,7 @@ Prior art: `/home/ferret/Projects/Github/butterchurn-srgb` (hand-written `signal
 ### 3.3 Unknown, to be determined by the probe (§9)
 
 - Runtime raw types of `boolean`, `color` and `list` values.
-- Whether `on<Prop>Changed` fires at load, and in what order.
+- Exact order and timing of the load-time `on<Prop>Changed` calls.
 - UA signatures of both renderers.
 - Viewport size.
 - JS/ES feature level and `type="module"` support.
@@ -197,7 +197,7 @@ export default defineConfig({
 - `script?: 'classic' | 'module'`. Default `'classic'` (§8).
 - `dropConsole?: boolean`. Default `true`.
 - `target?: string | string[]`. Default `'es2020'`, provisional until the probe (§9).
-- `devtools?: boolean | { fireChangedOnLoad?: boolean }`. Default `true`; applies in serve mode only. `fireChangedOnLoad` defaults to `false` until the probe shows SignalRGB fires handlers at load. A `false` default means an effect that relies on load-time firing fails visibly in dev rather than silently in SignalRGB.
+- `devtools?: boolean | { fireChangedOnLoad?: boolean }`. Default `true`; applies in serve mode only. `fireChangedOnLoad` defaults to `true`, which mirrors SignalRGB's load-time calls (§3.2).
 
 `srgbEffect` uses a `const` type parameter so literal types are preserved. That gives config-time type errors for mistakes such as a `list` default that is not in `values`.
 
@@ -397,7 +397,9 @@ The bootstrap, synchronously at module top level:
 - Sets every property global from localStorage or the default, in SignalRGB raw format.
 - Defines the `on<Prop>Changed` prelude.
 - Installs the `engine` mock (`audio`, `zone`, `vision`).
-- After user code has run, fires every `on<Prop>Changed` in property order, only if `fireChangedOnLoad` is set (§5.1).
+- If `fireChangedOnLoad` is set (the default, §5.1), fires every `on<Prop>Changed` in property order on `DOMContentLoaded`.
+  - `DOMContentLoaded` fires after all module scripts have executed, so user handlers are already assigned.
+  - A microtask would not work here: the devtools module runs first, so a microtask would fire before user code.
 
 localStorage keys are namespaced by effect title (`srgb-effect-kit:<title>:…`), because all projects share the `localhost:5173` origin.
 
