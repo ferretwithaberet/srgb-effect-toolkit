@@ -18,6 +18,20 @@ afterEach(() => {
 });
 
 describe('mountUi', () => {
+  it('registers every tab in order', () => {
+    const drawer = mountUi({
+      win: window,
+      storage: createStorage(MANIFEST.title, () => localStorage),
+      consoleCounter: counter,
+      raf: { request: vi.fn(), cancel: vi.fn() },
+    } as unknown as DevtoolsContext);
+    expect(
+      [...drawer.root.querySelectorAll<HTMLElement>('[data-srgb-devtools-tab]')].map(
+        (tab) => tab.dataset.srgbDevtoolsTab,
+      ),
+    ).toEqual(['properties', 'audio', 'screen', 'meters', 'canvas', 'renderer', 'view', 'console']);
+  });
+
   it('shows the console count on the toggle badge', () => {
     const frames: FrameRequestCallback[] = [];
     console.error('before mount');
