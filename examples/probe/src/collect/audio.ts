@@ -1,4 +1,4 @@
-import { ctorName, serialize } from '../log';
+import { ctorName, logSection, serialize } from '../log';
 import { keysOf } from '../describe';
 import { now } from '../state';
 import { getEngine } from './engine';
@@ -21,6 +21,42 @@ const track = (r: Range, value: unknown): void => {
   r.min = r.min === null ? value : Math.min(r.min, value);
   r.max = r.max === null ? value : Math.max(r.max, value);
 };
+
+/** When `engine.audio.level` or `.freq` first became defined, once it has. */
+let appearedAt: number | null = null;
+let appearanceChecks = 0;
+
+/**
+ * Call every frame for the page's lifetime: logs `[probe] audio-appeared` (with the keys at that
+ * moment) the first time `engine.audio.level` or `engine.audio.freq` is defined, then stops.
+ * UltraLight's `engine.audio` started empty, so the data may arrive late or never.
+ */
+export function checkAudioAppeared(): void {
+  if (appearedAt !== null) return;
+  appearanceChecks++;
+  const engine = getEngine();
+  const audio = engine ? (engine.audio as Record<string, unknown> | undefined) : undefined;
+  if (!audio || typeof audio !== 'object') return;
+  if (audio.level === undefined && audio.freq === undefined) return;
+  appearedAt = now();
+  const keys: Record<string, string> = {};
+  for (const key of keysOf(audio)) {
+    try {
+      keys[key] = typeof audio[key];
+    } catch {
+      keys[key] = 'throws';
+    }
+  }
+  logSection('audio-appeared', {
+    t: appearedAt,
+    check: appearanceChecks,
+    // True when it was already defined on the first check, so "appeared" means "was there".
+    atFirstCheck: appearanceChecks === 1,
+    levelTypeof: typeof audio.level,
+    freqTypeof: typeof audio.freq,
+    keys,
+  });
+}
 
 /** Samples `engine.audio` once per animation frame; `result()` summarises the ranges. */
 export function createAudioRecorder() {
@@ -133,6 +169,7 @@ export function createAudioRecorder() {
         density,
         freq,
         otherKeys,
+        appearedAt,
       };
     },
   };

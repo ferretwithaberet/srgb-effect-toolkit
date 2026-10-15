@@ -3,6 +3,7 @@
 // Each group is logged as its own `features-<group>` line as soon as it completes; the REPORT gets
 // them combined under `features`.
 import { attempt, logError, logJson, sections, serialize, type Json } from '../log';
+import { withTimeout } from '../timeout';
 
 const message = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
@@ -157,22 +158,6 @@ function canvas2d(): unknown {
   const ctx = document.createElement('canvas').getContext('2d');
   return { context: Boolean(ctx), filter: ctx ? 'filter' in ctx : null };
 }
-
-/** Rejects after `ms`, so one hung check cannot hold up the section. */
-const withTimeout = <T>(promise: Promise<T>, ms: number, label: string): Promise<T> =>
-  new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms} ms`)), ms);
-    promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (error: unknown) => {
-        clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
 
 /** Settles to `{ ok: true, ... }` or `{ ok: false, error }`, never rejects or throws. */
 function settle(check: () => Promise<Record<string, unknown>>): Promise<Record<string, unknown>> {

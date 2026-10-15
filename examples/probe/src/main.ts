@@ -1,13 +1,14 @@
 // SRGB Probe: records facts about SignalRGB's environment as one-line `[probe] <section> <json>`
 // console messages. See TEST-PLAN.md for how to run it and what to send back.
-import { createPropWatcher, snapshotProperties, type Seen } from './collect/propWatch';
-import { createAudioRecorder } from './collect/audio';
+import { checkAudioAppeared, createAudioRecorder } from './collect/audio';
 import { collectEngine, collectMeters } from './collect/engine';
+import { logEngineKeys, logNowPlaying, logSensors } from './collect/engineApi';
 import { collectEnv, collectViewport } from './collect/env';
 import { collectRiskyFeatures, collectSafeFeatures } from './collect/features';
 import { collectGlobals } from './collect/globals';
 import { installHandlers, installLifecycle } from './collect/handlers';
 import { collectProperties, collectPropertyValues } from './collect/properties';
+import { createPropWatcher, snapshotProperties, type Seen } from './collect/propWatch';
 import { collectStart } from './collect/start';
 import { createMeterRecorder } from './collect/metersLive';
 import { createTimingRecorder } from './collect/timing';
@@ -43,6 +44,7 @@ run('properties', collectProperties);
 guard('lifecycle', installLifecycle);
 guard('handlers', installHandlers);
 run('engine', collectEngine);
+guard('engine-keys', () => logEngineKeys('0s'));
 run('meters', collectMeters);
 
 guard('features', collectSafeFeatures);
@@ -52,6 +54,7 @@ guard('prop-watch', () => {
   const watcher = createPropWatcher(initialProps || {});
   everyFrame('prop-watch', () => watcher.frame());
 });
+guard('audio-appeared', () => everyFrame('audio-appeared', checkAudioAppeared));
 
 // Timing, audio and meters: sampled on every animation frame for MEASURE_MS. A timer, not rAF, ends the
 // window, so the sections are logged even if rAF never fires.
@@ -84,10 +87,15 @@ guard('timing', () => {
     run('engine@5s', collectEngine);
     run('meters@5s', collectMeters);
     run('properties@5s', collectPropertyValues);
+    guard('engine-keys', () => logEngineKeys('5s'));
+    guard('now-playing', logNowPlaying);
+    guard('sensors', logSensors);
     // Last: WebGL, Worker and fetch can hang or crash a fragile engine.
     guard('features', () => void collectRiskyFeatures());
   }, MEASURE_MS);
 });
+
+setTimeout(() => guard('engine-keys', () => logEngineKeys('30s')), 30000);
 
 guard('report', startReports);
 
