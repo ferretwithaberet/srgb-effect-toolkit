@@ -3,14 +3,22 @@ const HTML_OPEN = /<html(?:\s[^>]*)?>/i;
 const DOCTYPE = /<!doctype[^>]*>/i;
 const BODY_CLOSE = /<\/body\s*>/gi;
 const COMMENT = /<!--[\s\S]*?-->/g;
+const LEADING_META_CHARSET = /^\s*<meta\s[^>]*\bcharset\s*=[^>]*>/i;
 
 const insertAt = (html: string, index: number, markup: string): string =>
   `${html.slice(0, index)}${markup}${html.slice(index)}`;
 
-/** Inserts markup at the start of <head>, creating the element when the document has none. */
+/**
+ * Inserts markup at the start of <head> (after a leading <meta charset>, which browsers expect
+ * first), creating the element when the document has none.
+ */
 export function injectIntoHead(html: string, markup: string): string {
   const head = HEAD_OPEN.exec(html);
-  if (head) return insertAt(html, head.index + head[0].length, `\n${markup}\n`);
+  if (head) {
+    const start = head.index + head[0].length;
+    const charset = LEADING_META_CHARSET.exec(html.slice(start));
+    return insertAt(html, start + (charset?.[0].length ?? 0), `\n${markup}\n`);
+  }
 
   const block = `<head>\n${markup}\n</head>\n`;
   const anchor = HTML_OPEN.exec(html) ?? DOCTYPE.exec(html);

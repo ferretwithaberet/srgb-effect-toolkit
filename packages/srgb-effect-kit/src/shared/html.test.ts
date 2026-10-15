@@ -8,6 +8,24 @@ describe('injectIntoHead', () => {
     ).toBe('<html><head lang="x">\n<title>T</title>\n<style></style></head></html>');
   });
 
+  it('keeps a leading <meta charset> first', () => {
+    expect(injectIntoHead('<head><meta charset="utf-8"><style></style></head>', 'M')).toBe(
+      '<head><meta charset="utf-8">\nM\n<style></style></head>',
+    );
+    expect(injectIntoHead('<head>\n  <META CHARSET=UTF-8 />\n  <link></head>', 'M')).toBe(
+      '<head>\n  <META CHARSET=UTF-8 />\nM\n\n  <link></head>',
+    );
+  });
+
+  it('does not move past a <meta charset> that is not the first element', () => {
+    expect(injectIntoHead('<head><style></style><meta charset="utf-8"></head>', 'M')).toBe(
+      '<head>\nM\n<style></style><meta charset="utf-8"></head>',
+    );
+    expect(injectIntoHead('<head><meta name="viewport" content="x"></head>', 'M')).toBe(
+      '<head>\nM\n<meta name="viewport" content="x"></head>',
+    );
+  });
+
   it('creates a head after <html> when missing', () => {
     expect(injectIntoHead('<!doctype html><html><body></body></html>', 'M')).toBe(
       '<!doctype html><html><head>\nM\n</head>\n<body></body></html>',
