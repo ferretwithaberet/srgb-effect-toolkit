@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { srgbEffect, type SrgbEffectOptions } from '../src/vite';
 import { buildFixture, cleanupFixtures, createFixture } from './helpers/fixture';
@@ -172,6 +174,25 @@ describe('srgbEffect build', () => {
     const main = 'await Promise.resolve(); document.title = "x";';
     const { html } = await buildOnly(project(main), { script: 'module' });
     expect(html).toContain('<script type="module">');
+  });
+
+  it('warns that public/ files are not part of the single-file effect', async () => {
+    const root = project('document.title = "x";');
+    fs.mkdirSync(path.join(root, 'public'));
+    fs.writeFileSync(path.join(root, 'public/logo.png'), PNG);
+    const { files, warnings } = await buildOnly(root);
+    expect([...files.keys()]).toEqual(['build-test.html']);
+    expect(warnings).toContainEqual(
+      expect.stringContaining(
+        '[srgb-effect] files in public are not copied into the single-file effect; import assets from source instead so they get inlined',
+      ),
+    );
+  });
+
+  it('stays quiet about an empty public directory', async () => {
+    const root = project('document.title = "x";');
+    fs.mkdirSync(path.join(root, 'public/empty'), { recursive: true });
+    expect((await buildOnly(root)).warnings).toEqual([]);
   });
 
   it('keeps build warnings clean', async () => {

@@ -1,10 +1,26 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import type { Plugin, Rolldown } from 'vite';
 import { generatePrelude, injectBeforeBodyEnd, injectIntoHead, serializeHead } from '../shared';
 import { inlineAssets, scriptTag } from './inline';
 import type { ResolvedOptions } from './options';
 
+const hasFiles = (dir: string): boolean => {
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return false;
+  }
+  return entries.some((entry) =>
+    entry.isDirectory() ? hasFiles(path.join(dir, entry.name)) : true,
+  );
+};
+
 export function buildPlugin(options: ResolvedOptions): Plugin {
   let base = '/';
+  let root = process.cwd();
+  let publicDir = '';
 
   return {
     name: 'srgb-effect:build',
@@ -35,6 +51,17 @@ export function buildPlugin(options: ResolvedOptions): Plugin {
 
     configResolved(config) {
       base = config.base;
+      root = config.root;
+      publicDir = config.publicDir;
+    },
+
+    buildStart() {
+      // copyPublicDir is off: SignalRGB loads a single HTML file, so public/ files would be lost.
+      if (publicDir && hasFiles(publicDir)) {
+        this.warn(
+          `[srgb-effect] files in ${path.relative(root, publicDir) || publicDir} are not copied into the single-file effect; import assets from source instead so they get inlined`,
+        );
+      }
     },
 
     onLog(_level, log) {
