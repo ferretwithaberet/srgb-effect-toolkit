@@ -72,7 +72,18 @@ export function createAudioController(
   const run = (next: AudioSource) => {
     source = next;
     const frame = () => {
-      writeAudioFrame(audio, next.read());
+      try {
+        writeAudioFrame(audio, next.read());
+      } catch (reason) {
+        // A broken source must not stay live behind a mode that claims it is running.
+        if (source !== next) return;
+        stop();
+        error = reason instanceof Error ? reason.message : String(reason);
+        mode = 'silent';
+        writeAudioFrame(audio, silentFrame());
+        notify();
+        return;
+      }
       frameId = raf.request(frame);
     };
     frame();
@@ -83,8 +94,10 @@ export function createAudioController(
     stop();
     error = undefined;
     mode = next;
-    if (RESTORABLE.includes(next)) storage.write(STORAGE_KEY, { mode: next });
-    if (next === 'silent') writeAudioFrame(audio, silentFrame());
+    // Capture modes persist silent: a reload must not restore a stale random mode.
+    storage.write(STORAGE_KEY, { mode: RESTORABLE.includes(next) ? next : 'silent' });
+    // No stale frame may linger while a permission prompt is open.
+    if (next !== 'random') writeAudioFrame(audio, silentFrame());
     else if (next === 'random') run({ read: () => randomFrame(), stop: () => {} });
     notify();
     if (next !== 'microphone' && next !== 'system') return;
@@ -101,6 +114,7 @@ export function createAudioController(
       run(capture);
     } catch (reason) {
       if (current !== generation) return;
+      stop();
       error = reason instanceof Error ? reason.message : String(reason);
       mode = 'silent';
       writeAudioFrame(audio, silentFrame());
@@ -153,39 +167,65 @@ export async function openAudioCapture(
     throw new Error('No audio was shared. Pick a tab or screen and tick "Share audio".');
   }
 
+  const tracks = stream.getTracks();
   const context = new AudioContext();
-  void context.resume();
-  const input = context.createMediaStreamSource(new MediaStream([track]));
-  const splitter = context.createChannelSplitter(2);
-  const left = context.createAnalyser();
-  const right = context.createAnalyser();
-  const mixed = context.createAnalyser();
-  left.fftSize = 1024;
-  right.fftSize = 1024;
-  mixed.fftSize = 512;
-  mixed.smoothingTimeConstant = 0.8;
-  input.connect(splitter);
-  splitter.connect(left, 0);
-  splitter.connect(right, 1);
-  input.connect(mixed);
-
-  const leftSamples = new Float32Array(left.fftSize);
-  const rightSamples = new Float32Array(right.fftSize);
-  const spectrum = new Uint8Array(mixed.frequencyBinCount);
-  const mono = track.getSettings().channelCount === 1;
-  track.addEventListener('ended', onEnded);
-
-  return {
-    read() {
-      left.getFloatTimeDomainData(leftSamples);
-      right.getFloatTimeDomainData(rightSamples);
-      mixed.getByteFrequencyData(spectrum);
-      return analyserFrame({ left: leftSamples, right: rightSamples, spectrum, mono });
-    },
-    stop() {
-      input.disconnect();
-      stopStream();
-      void context.close();
-    },
+  const closeContext = () => {
+    if (context.state !== 'closed') void context.close().catch(() => {});
   };
+  const nodes: AudioNode[] = [];
+  let endedOnce = false;
+  const ended = () => {
+    if (endedOnce) return;
+    endedOnce = true;
+    onEnded();
+  };
+  const release = () => {
+    for (const each of tracks) each.removeEventListener('ended', ended);
+    for (const node of nodes) {
+      try {
+        node.disconnect();
+      } catch {
+        // Already disconnected.
+      }
+    }
+    stopStream();
+    closeContext();
+  };
+
+  try {
+    void context.resume();
+    const input = context.createMediaStreamSource(new MediaStream([track]));
+    const splitter = context.createChannelSplitter(2);
+    const left = context.createAnalyser();
+    const right = context.createAnalyser();
+    const mixed = context.createAnalyser();
+    nodes.push(input, splitter, left, right, mixed);
+    left.fftSize = 1024;
+    right.fftSize = 1024;
+    mixed.fftSize = 512;
+    mixed.smoothingTimeConstant = 0.8;
+    input.connect(splitter);
+    splitter.connect(left, 0);
+    splitter.connect(right, 1);
+    input.connect(mixed);
+
+    const leftSamples = new Float32Array(left.fftSize);
+    const rightSamples = new Float32Array(right.fftSize);
+    const spectrum = new Uint8Array(mixed.frequencyBinCount);
+    const mono = track.getSettings().channelCount === 1;
+    for (const each of tracks) each.addEventListener('ended', ended);
+
+    return {
+      read() {
+        left.getFloatTimeDomainData(leftSamples);
+        right.getFloatTimeDomainData(rightSamples);
+        mixed.getByteFrequencyData(spectrum);
+        return analyserFrame({ left: leftSamples, right: rightSamples, spectrum, mono });
+      },
+      stop: release,
+    };
+  } catch (reason) {
+    release();
+    throw reason;
+  }
 }
