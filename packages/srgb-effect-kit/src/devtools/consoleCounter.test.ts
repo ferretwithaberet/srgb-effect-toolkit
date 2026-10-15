@@ -41,6 +41,29 @@ describe('installConsoleCounter', () => {
     expect(counter.counts.uncaught).toBe(2);
   });
 
+  it('survives a throwing listener and reports its error', () => {
+    vi.stubGlobal('reportError', vi.fn());
+    const error = new Error('listener');
+    counter.subscribe(() => {
+      throw error;
+    });
+    expect(() => console.warn('still forwarded')).not.toThrow();
+    expect(warn).toHaveBeenCalledWith('still forwarded');
+    expect(window.reportError).toHaveBeenCalledWith(error);
+    vi.unstubAllGlobals();
+  });
+
+  it('forwards but does not count logging from inside a listener', () => {
+    let calls = 0;
+    counter.subscribe(() => {
+      calls += 1;
+      console.log('from listener');
+    });
+    console.log('x');
+    expect(calls).toBe(1);
+    expect(counter.counts.log).toBe(1);
+  });
+
   it('notifies subscribers, resets and restores', () => {
     const listener = vi.fn();
     counter.subscribe(listener);

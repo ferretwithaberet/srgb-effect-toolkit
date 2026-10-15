@@ -113,6 +113,33 @@ describe('createRafThrottle', () => {
     expect(frames.length).toBe(30 + 20);
   });
 
+  it('isolates a throwing callback so the others in the frame still run', () => {
+    const { native, tick } = fakeNative();
+    const report = vi.fn();
+    const throttle = createRafThrottle(native, () => 60, report);
+    const error = new Error('boom');
+    const second = vi.fn();
+    throttle.request(() => {
+      throw error;
+    });
+    throttle.request(second);
+    tick(1000);
+    expect(second).toHaveBeenCalledWith(1000);
+    expect(report).toHaveBeenCalledWith(error);
+  });
+
+  it('reports through the global reportError by default', () => {
+    vi.stubGlobal('reportError', vi.fn());
+    const { native, tick } = fakeNative();
+    const error = new Error('boom');
+    createRafThrottle(native, () => 60).request(() => {
+      throw error;
+    });
+    tick(1000);
+    expect(globalThis.reportError).toHaveBeenCalledWith(error);
+    vi.unstubAllGlobals();
+  });
+
   it('passes the refresh timestamp, supports cancel and stops requesting when idle', () => {
     const { native, tick, pending } = fakeNative();
     const throttle = createRafThrottle(native, () => 30);
@@ -182,6 +209,15 @@ describe('installRendererSimulation', () => {
       renderer: 'ultralight',
       fps: 45,
     });
+  });
+
+  it('clamps a stored out-of-range FPS at install', () => {
+    localStorage.setItem(
+      'srgb-effect-kit:Renderer Test:renderer',
+      JSON.stringify({ renderer: 'ultralight', fps: 5 }),
+    );
+    const controller = installRendererSimulation(window, storage(), fakeNative().native, vi.fn());
+    expect(controller.settings).toEqual({ renderer: 'ultralight', fps: 20 });
   });
 
   it('ignores invalid stored settings and clamps the FPS', () => {

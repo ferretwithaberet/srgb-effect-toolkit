@@ -1,5 +1,6 @@
 import type { Renderer } from '../runtime/renderer';
 import type { DevtoolsWindow, FrameScheduler } from './context';
+import { reportError } from './lifecycle';
 import type { DevtoolsStorage } from './storage';
 
 /** SignalRGB's FPS setting range. */
@@ -49,9 +50,14 @@ const JITTER_TOLERANCE_MS = 1;
 /**
  * A `requestAnimationFrame` that runs callbacks at most `getFps()` times per second, like
  * UltraLight does at SignalRGB's FPS setting. Callbacks requested during a flush run in a later
- * one. Built on `native`, which must be the unpatched rAF.
+ * one. A throwing callback is reported through `report` and doesn't stop the others, like native
+ * rAF. Built on `native`, which must be the unpatched rAF.
  */
-export function createRafThrottle(native: FrameScheduler, getFps: () => number): FrameScheduler {
+export function createRafThrottle(
+  native: FrameScheduler,
+  getFps: () => number,
+  report: (error: unknown) => void = (error) => reportError(globalThis as DevtoolsWindow, error),
+): FrameScheduler {
   let nextId = 1;
   let pending = new Map<number, FrameRequestCallback>();
   let scheduled = false;
@@ -75,7 +81,13 @@ export function createRafThrottle(native: FrameScheduler, getFps: () => number):
     }
     const callbacks = pending;
     pending = new Map();
-    for (const callback of callbacks.values()) callback(timestamp);
+    for (const callback of callbacks.values()) {
+      try {
+        callback(timestamp);
+      } catch (error) {
+        report(error);
+      }
+    }
   };
   const schedule = () => {
     if (scheduled) return;
@@ -127,7 +139,11 @@ export function installRendererSimulation(
     overrideUserAgent(win.navigator, SIMULATED_USER_AGENTS[settings.renderer]);
   }
   if (settings.renderer === 'ultralight') {
-    const throttle = createRafThrottle(native, () => settings.fps);
+    const throttle = createRafThrottle(
+      native,
+      () => settings.fps,
+      (error) => reportError(win, error),
+    );
     win.requestAnimationFrame = (callback) => throttle.request(callback);
     win.cancelAnimationFrame = (id) => throttle.cancel(id);
   }

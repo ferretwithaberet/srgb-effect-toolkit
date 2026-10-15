@@ -1,4 +1,5 @@
 import type { DevtoolsWindow } from './context';
+import { reportError } from './lifecycle';
 
 /** Console methods whose calls are counted. */
 export const COUNTED_METHODS = ['log', 'info', 'warn', 'error', 'debug'] as const;
@@ -30,8 +31,20 @@ const isViteMessage = (args: unknown[]) =>
 export function installConsoleCounter(win: DevtoolsWindow): ConsoleCounter {
   const counts = zero();
   const listeners = new Set<(counts: Readonly<ConsoleCounts>) => void>();
+  let notifying = false;
   const notify = () => {
-    for (const listener of listeners) listener(counts);
+    notifying = true;
+    try {
+      for (const listener of listeners) {
+        try {
+          listener(counts);
+        } catch (error) {
+          reportError(win, error);
+        }
+      }
+    } finally {
+      notifying = false;
+    }
   };
   const count = (key: keyof ConsoleCounts) => {
     counts[key] += 1;
@@ -44,8 +57,9 @@ export function installConsoleCounter(win: DevtoolsWindow): ConsoleCounter {
     const original = console[method] as (...args: unknown[]) => void;
     originals.set(method, original);
     console[method] = (...args: unknown[]) => {
-      if (!isViteMessage(args)) count(method);
       original.apply(console, args);
+      // Output from inside a listener is forwarded but not counted, so a logging listener can't recurse.
+      if (!notifying && !isViteMessage(args)) count(method);
     };
   }
   const onError = () => count('uncaught');
