@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { createServer } from 'vite';
+import { createLogger, createServer } from 'vite';
 import { afterEach, describe, expect, it } from 'vitest';
 import { srgbEffect } from '../src/vite';
 import { buildFixture, cleanupFixtures, createFixture } from './helpers/fixture';
@@ -82,5 +82,50 @@ describe('srgbEffect core', () => {
         build: { rolldownOptions: { input: path.join(root, 'effect.html') } },
       }),
     ).rejects.toThrow(/\[srgb-effect\] effect\.html must not contain <title>/);
+  });
+
+  describe('custom HTML entry in dev', () => {
+    const start = async (input: string, logs: string[] = []) => {
+      const root = createFixture({
+        'index.html': '<body></body>',
+        'effect.html': '<body></body>',
+      });
+      const logger = createLogger('info', { allowClearScreen: false });
+      logger.info = (message) => void logs.push(message);
+      const server = await createServer({
+        root,
+        configFile: false,
+        customLogger: logger,
+        server: { host: '127.0.0.1', port: 0, ws: false },
+        build: { rolldownOptions: { input: path.join(root, input) } },
+        plugins: [srgbEffect(options)],
+      });
+      await server.listen();
+      return server;
+    };
+
+    it('redirects / to a non-index entry', async () => {
+      const server = await start('effect.html');
+      const url = server.resolvedUrls?.local[0] ?? '';
+      const response = await fetch(url, { redirect: 'manual' });
+      expect(response.status).toBe(302);
+      expect(response.headers.get('location')).toBe('/effect.html');
+      await server.close();
+    });
+
+    it('prints local URLs that include the entry path', async () => {
+      const logs: string[] = [];
+      const server = await start('effect.html', logs);
+      server.printUrls();
+      expect(logs.join('\n')).toMatch(/http:\/\/127\.0\.0\.1:\d+\/effect\.html/);
+      await server.close();
+    });
+
+    it('leaves index.html entries alone', async () => {
+      const server = await start('index.html');
+      const response = await fetch(server.resolvedUrls?.local[0] ?? '', { redirect: 'manual' });
+      expect(response.status).toBe(200);
+      await server.close();
+    });
   });
 });

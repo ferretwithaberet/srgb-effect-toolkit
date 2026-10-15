@@ -122,6 +122,19 @@ Set `fileName` to choose another name. It must be a plain file name ending in `.
 srgbEffect({ title: 'My Effect', fileName: 'my-effect-dev.html' });
 ```
 
+## Custom HTML entry
+
+The entry does not have to be called `index.html`. Point `build.rolldownOptions.input` at a single `.html` file:
+
+```ts
+export default defineConfig({
+  build: { rolldownOptions: { input: 'my-effect.html' } },
+  plugins: [srgbEffect({ title: 'My Effect' })],
+});
+```
+
+Build errors then name that file. In `pnpm dev`, Vite has no `index.html` to serve at `/`, which would return 404. For a single non-index entry the plugin redirects `/` to the entry (`/my-effect.html`) and appends the entry path to the local and network URLs Vite prints, so you can open them directly.
+
 ## The generated types file
 
 The plugin also writes `src/srgb-effect.d.ts` (the `typesFile` option) whenever Vite loads the config, during builds as well as `pnpm dev`. It is generated, so do not commit it: add it to `.gitignore`. Vite regenerates it on every `vite` and `vite build`. Prettier respects `.gitignore` by default, so no `.prettierignore` entry is needed. Because the file does not exist on a fresh clone, the template's `"build": "tsc && vite build"` fails until Vite has run once; use `"build": "vite build && tsc"` instead, or run `pnpm dev` once. [Globals](globals.md#how-the-typing-works) explains what the file contains.
