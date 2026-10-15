@@ -114,13 +114,7 @@ The devtools also have end-to-end tests. They drive `examples/basic-2d` in Chrom
 ```sh
 pnpm build
 pnpm exec playwright install chromium   # once; or set CHROMIUM_PATH to a local Chromium
-pnpm test:e2e
-```
-
-To use a system Chromium instead of Playwright's download, for example on a machine where it is not installed:
-
-```sh
-CHROMIUM_PATH=/usr/bin/chromium pnpm test:e2e
+CHROMIUM_PATH=/usr/bin/chromium pnpm test:e2e   # or just `pnpm test:e2e` with Playwright's own Chromium
 ```
 
 Layout:
@@ -129,7 +123,7 @@ Layout:
 - `examples/`: example effects, built against the workspace package.
 - `docs/`: user documentation.
 
-Status: the plugin, the runtime and the devtools are built. The probe effect that verifies behaviour on real SignalRGB (Plan 3) is not built yet, so the simulated user agents, raw formats and load-time call order are provisional.
+Status: the plugin, the runtime and the devtools are built. The probe effect that verifies behaviour on real SignalRGB (the upcoming SignalRGB probe) is not built yet, so the simulated user agents, raw formats and load-time call order are provisional.
 
 ## License
 

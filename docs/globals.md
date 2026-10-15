@@ -224,11 +224,11 @@ The full list is `SRGBEngine`, `EngineAudio`, `EngineZone`, `CanvasApiEvent` and
 
 In `pnpm dev`, the [devtools](devtools.md) define every global on this page before your code runs:
 
-- Property globals hold SignalRGB's raw format, starting from your defaults.
+- Property globals hold SignalRGB's raw format. With `devtools: 'full'`, a value you chose in the drawer wins over the default after a reload; with `'minimal'` they always start from your defaults.
 - Every handler global exists, so a bare assignment works.
 - `engine` is a mock.
 
-On `DOMContentLoaded`, the devtools call each `on<Prop>Changed` once, like SignalRGB does at load. With the default `devtools: 'full'`, the drawer's controls change the globals and call the handlers on every change. `devtools: 'minimal'` keeps the globals at their defaults, with nothing on screen.
+On `DOMContentLoaded`, the devtools call each `on<Prop>Changed` once, like SignalRGB does at load. With the default `devtools: 'full'`, the drawer's controls change the globals and call the handlers on every change. `devtools: 'minimal'` keeps the globals at their defaults, with nothing on screen and nothing persisted.
 
 With `devtools: 'none'` none of this happens:
 

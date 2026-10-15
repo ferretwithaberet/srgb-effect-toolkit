@@ -23,11 +23,12 @@ A mode string means `{ mode, fireChangedOnLoad: true }`. The rest of this page d
 
 ## What happens when the page loads
 
-The plugin adds a module script at the start of `<head>`. Module scripts run in document order, so it runs before your code and, synchronously, does the following (in `'minimal'`, only steps 1, 3 and 4, with defaults instead of stored values):
+The plugin adds a module script at the start of `<head>`. Module scripts run in document order, so it runs before your code and, synchronously, does the following in this order. In `'minimal'`, only steps 3, 4 and 5 happen, with defaults instead of stored values:
 
-1. Creates every `on<Prop>Changed` global and `onCanvasApiEvent`, set to `undefined`, like the build's prelude. A bare `onSpeedChanged = …` therefore works in dev too.
-2. Applies the [renderer simulation](#renderer) you last chose.
-3. Sets every property global in SignalRGB's raw format, using the value you last chose or the default:
+1. Applies the [renderer simulation](#renderer) you last chose.
+2. Starts counting console messages for the drawer's badge.
+3. Creates every `on<Prop>Changed` global and `onCanvasApiEvent`, set to `undefined`, like the build's prelude. A bare `onSpeedChanged = …` therefore works in dev too.
+4. Sets every property global in SignalRGB's raw format, using the value you last chose or the default:
 
    | Type                | Raw value      |
    | ------------------- | -------------- |
@@ -36,10 +37,11 @@ The plugin adds a module script at the start of `<head>`. Module scripts run in 
    | `color`             | `#rrggbb`      |
    | `textfield`, `list` | string         |
 
-4. Installs a mock `engine`:
+5. Installs a mock `engine`, and starts listening for [canvas API events](#canvas-api) from the dev server:
    - `engine.audio` is silent;
    - `engine.zone` is black;
    - `engine.vision.<meter>` is 0 for every meter, and -1 for `ocr_numeric`.
+6. Restores the audio and screen sources you last chose (`'full'` only). Silent and Random audio, and Solid color and Gradient screens, come back; captures do not.
 
 Your code then runs. On `DOMContentLoaded`, after every module script has run, the devtools call each `on<Prop>Changed` once, in property order, like SignalRGB does at load. Then they mount the drawer.
 
@@ -90,7 +92,7 @@ Values persist across reloads. A stored value that no longer fits the config fal
 
 ### Audio
 
-Writes `engine.audio` on every native animation frame:
+Writes `engine.audio` in place. Silent writes once, when you switch to it; Random and the capture modes write on every native animation frame:
 
 | Mode         | Behaviour                                                                                                             |
 | ------------ | --------------------------------------------------------------------------------------------------------------------- |
@@ -132,7 +134,7 @@ There is one control per meter, and its value goes to `engine.vision.<meter>`:
 - `ocr_textmatch`: 1, 0 or -1.
 - `ocr_numeric`: a whole number, -1 for "nothing read".
 
-In the number field, a half-typed value such as `-` stays as you typed it, and nothing is written until it is a number. The value is committed when the field changes, for example when you leave it.
+In the number field, a valid number is written as you type. Only empty or partial text, such as `''` or `-`, waits: nothing is written until it is a number, and it is committed when the field changes, for example when you leave it.
 
 While the Screen tab captures, `linear` and `area` meters are computed from the capture instead: the fraction of pixels in the meter's region whose color falls inside its `h`, `s` and `l` ranges. The region comes from the [resolution override](configuration.md#resolutions) that matches the captured screen's size, or its aspect ratio within 3%. `hdr-*` ranges are not simulated. OCR meters are always manual.
 
@@ -165,14 +167,14 @@ Simulates the renderer SignalRGB uses, together with its FPS setting (20–60):
 
 [`detectRenderer()`](runtime-api.md#detectrenderer) and `isSignalRGB()` follow the simulation without any code change. Changing the renderer reloads the page, so your code starts under it. The FPS setting applies at once. The tab measures the requestAnimationFrame rate your loop actually gets.
 
-The simulated user agents are placeholders until the probe effect verifies them on SignalRGB (Plan 3). The simulation covers the user agent and frame timing only; it does not reproduce each renderer's web feature support.
+The simulated user agents are placeholders until the probe effect verifies them on SignalRGB (the upcoming SignalRGB probe). The simulation covers the user agent and frame timing only; it does not reproduce each renderer's web feature support.
 
 ### SignalRGB view
 
 A live, pixelated 2× copy of the visible 320×200, redrawn at the FPS setting:
 
 - If a canvas covers the area, it is sampled directly. A WebGL canvas must be created with `preserveDrawingBuffer: true` for this to work; without it the view may stay blank.
-- Otherwise, **Capture this tab** shares the current tab and crops it. The capture is opt-in, is never restored after a reload, and stops when you leave the tab or close the drawer. In a browser that exposes no `navigator.mediaDevices`, it reports `[srgb-effect] tab capture needs a secure context (https or localhost)`.
+- Otherwise, **Capture this tab** shares the current tab and crops it. The capture is opt-in, is never restored after a reload, and stops when you leave the tab or close the drawer. In a browser that exposes no `navigator.mediaDevices`, the tab shows `Tab capture failed:` followed by the reason, which here starts with `[srgb-effect] tab capture needs a secure context`.
 
 The view samples on the browser's own frame timing, so UltraLight's throttle does not slow it down.
 
