@@ -18,7 +18,7 @@ The build relies on Rolldown's IIFE output and `codeSplitting: false`. A `genera
 
 **Tech Stack:** TypeScript ~6.0, Vite 8 (Rolldown), tsdown 0.23, vitest 5, jsdom, pnpm 10 workspaces, ESLint 10 + typescript-eslint, Prettier.
 
-**Spec:** `docs/superpowers/specs/2026-10-13-srgb-effect-kit-design.md`
+**Spec:** `.superpowers/specs/2026-10-13-srgb-effect-kit-design.md`
 
 **Scope:** This is Plan 1 of 3.
 - Plan 2 covers devtools (spec §10). It consumes `ResolvedOptions.devtools`, `generatePrelude`, `serializeHead` and `injectIntoHead` from this plan.
