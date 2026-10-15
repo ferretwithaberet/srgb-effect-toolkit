@@ -1,5 +1,6 @@
 import { ctorName, serialize } from '../log';
 import { keysOf } from '../describe';
+import { now } from '../state';
 import { getEngine } from './engine';
 
 const KNOWN = ['level', 'width', 'density', 'freq'];
@@ -38,7 +39,16 @@ export function createAudioRecorder() {
     newObjectFrames: 0,
     sameObjectFrames: 0,
     firstSample: null as unknown,
+    /** The frame whose finite bands summed highest: its first 16 bands, sum and peak band. */
+    loudestSample: null as unknown,
   };
+  let loudestSum = -Infinity;
+  // Data refresh rate: frames where level or the freq contents differ from the previous frame.
+  const start = now();
+  let compared = 0;
+  let updates = 0;
+  let previousLevel: unknown = undefined;
+  let previousBands: unknown[] | null = null;
   let previousFreq: unknown = undefined;
   let otherKeys: string[] | null = null;
 
@@ -63,10 +73,14 @@ export function createAudioRecorder() {
         else freq.newObjectFrames++;
       }
       previousFreq = bands;
-      if (freq.firstSample === null)
+      if (freq.firstSample === null) {
         freq.firstSample = serialize(Array.prototype.slice.call(bands, 0, 16));
-      for (let i = 0; i < bands.length; i++) {
-        const value = bands[i];
+      }
+      const copy: unknown[] = Array.prototype.slice.call(bands);
+      let sum = 0;
+      let peak = -1;
+      for (let i = 0; i < copy.length; i++) {
+        const value = copy[i];
         if (typeof value !== 'number' || !Number.isFinite(value)) {
           freq.nonFinite++;
           continue;
@@ -74,7 +88,39 @@ export function createAudioRecorder() {
         if (value < 0) freq.negative++;
         freq.min = freq.min === null ? value : Math.min(freq.min, value);
         freq.max = freq.max === null ? value : Math.max(freq.max, value);
+        sum += value;
+        if (peak === -1 || value > (copy[peak] as number)) peak = i;
       }
+      if (sum > loudestSum) {
+        loudestSum = sum;
+        freq.loudestSample = serialize({
+          frame: frames,
+          sum,
+          peakBand: peak,
+          peakValue: peak === -1 ? null : copy[peak],
+          bands: copy.slice(0, 16),
+        });
+      }
+      if (previousBands !== null) {
+        compared++;
+        let differs =
+          !Object.is(audio.level, previousLevel) || copy.length !== previousBands.length;
+        for (let i = 0; !differs && i < copy.length; i++) {
+          if (!Object.is(copy[i], previousBands[i])) differs = true;
+        }
+        if (differs) updates++;
+      }
+      previousLevel = audio.level;
+      previousBands = copy;
+    },
+    /** How often the engine's audio data actually changed, against how often it was read. */
+    updates() {
+      const seconds = (now() - start) / 1000;
+      return {
+        count: updates,
+        comparedFrames: compared,
+        hz: seconds > 0 ? updates / seconds : null,
+      };
     },
     result() {
       const engine = getEngine();

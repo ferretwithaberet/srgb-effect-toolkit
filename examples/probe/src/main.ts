@@ -8,6 +8,7 @@ import { collectGlobals } from './collect/globals';
 import { installHandlers, installLifecycle } from './collect/handlers';
 import { collectProperties, collectPropertyValues } from './collect/properties';
 import { collectStart } from './collect/start';
+import { createMeterRecorder } from './collect/metersLive';
 import { createTimingRecorder } from './collect/timing';
 import { collectZone } from './collect/zone';
 import { guard, run } from './log';
@@ -31,16 +32,18 @@ run('meters', collectMeters);
 
 guard('features', collectSafeFeatures);
 
-// Timing and audio: sampled on every animation frame for MEASURE_MS. A timer, not rAF, ends the
+// Timing, audio and meters: sampled on every animation frame for MEASURE_MS. A timer, not rAF, ends the
 // window, so the sections are logged even if rAF never fires.
 guard('timing', () => {
   const timing = createTimingRecorder();
   const audio = createAudioRecorder();
+  const meters = createMeterRecorder();
   let measuring = true;
   const frame = (timestamp: unknown) => {
     if (!measuring) return;
     guard('timing', () => timing.frame(timestamp));
     guard('audio', () => audio.sample());
+    guard('meters-live', () => meters.sample());
     requestAnimationFrame(frame);
   };
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(frame);
@@ -48,10 +51,12 @@ guard('timing', () => {
     measuring = false;
     run('timing', () => {
       const result = timing.result();
-      state.hz = result.raf.hz;
+      state.hz = result.raf.hz !== null ? result.raf.hz : result.raf.nowHz;
       return result;
     });
     run('audio', () => audio.result());
+    run('engineUpdates', () => audio.updates());
+    run('meters-live', () => meters.result());
     run('zone', collectZone);
     // Late snapshots: SignalRGB may fill engine, meters, properties or the viewport after load.
     run('env@5s', collectViewport);
