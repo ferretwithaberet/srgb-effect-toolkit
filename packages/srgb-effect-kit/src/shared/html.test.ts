@@ -59,4 +59,37 @@ describe('findForbiddenHeadTags', () => {
       ),
     ).toEqual([]);
   });
+
+  it('ignores titles and meta-like text inside svg, script, template and style', () => {
+    expect(
+      findForbiddenHeadTags(
+        [
+          '<body><SVG viewBox="0 0 1 1"><title>Logo</title></SVG>',
+          '<script>const t = "<title>x</title><meta property=\'a\'>";</script>',
+          '<template><title>t</title><meta meter="m"></template>',
+          '<style>/* <title> */</style>',
+          '<svg><title>a</title></svg><p>text</p><svg><title>b</title></svg></body>',
+        ].join(''),
+      ),
+    ).toEqual([]);
+  });
+
+  it('still finds forbidden tags outside and between ignored blocks', () => {
+    expect(findForbiddenHeadTags('<svg><title>a</title></svg><title>real</title>')).toEqual([
+      '<title>',
+    ]);
+    expect(findForbiddenHeadTags('<script></script><meta publisher="x"><style></style>')).toEqual([
+      '<meta publisher>',
+    ]);
+  });
+
+  it('explains Open Graph style meta property tags', () => {
+    const og = '<meta property> (Open Graph style meta tags collide with SignalRGB controls)';
+    expect(findForbiddenHeadTags('<meta property="og:title" content="x">')).toEqual([og]);
+    expect(findForbiddenHeadTags("<meta content='x' property='twitter:card'>")).toEqual([og]);
+    expect(findForbiddenHeadTags('<meta property=og:image content="x">')).toEqual([og]);
+    expect(findForbiddenHeadTags('<meta property="speed" type="number">')).toEqual([
+      '<meta property>',
+    ]);
+  });
 });

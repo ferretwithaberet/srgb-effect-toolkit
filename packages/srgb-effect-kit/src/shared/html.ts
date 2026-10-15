@@ -26,9 +26,14 @@ export function injectBeforeBodyEnd(html: string, markup: string): string {
   return insertAt(html, last.index, `\n${markup}\n`);
 }
 
-const FORBIDDEN: readonly (readonly [label: string, pattern: RegExp])[] = [
-  ['<title>', /<title[\s>]/i],
-  ['<meta property>', /<meta\b[^>]*\sproperty\s*=/i],
+/** Elements whose content may legitimately contain <title> or meta-like text (e.g. inline SVG). */
+const IGNORED_BLOCK = /<(svg|script|template|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
+const META_PROPERTY = /<meta\b[^>]*\sproperty\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi;
+const OPEN_GRAPH_LABEL =
+  '<meta property> (Open Graph style meta tags collide with SignalRGB controls)';
+
+const TITLE = /<title[\s>]/i;
+const FORBIDDEN_META: readonly (readonly [label: string, pattern: RegExp])[] = [
   ['<meta meter>', /<meta\b[^>]*\smeter\s*=/i],
   ['<meta description>', /<meta\b[^>]*\sdescription\s*=/i],
   ['<meta publisher>', /<meta\b[^>]*\spublisher\s*=/i],
@@ -36,6 +41,14 @@ const FORBIDDEN: readonly (readonly [label: string, pattern: RegExp])[] = [
 
 /** Tags that srgbEffect() generates and therefore must not be hand-written in index.html. */
 export function findForbiddenHeadTags(html: string): string[] {
-  const source = html.replace(COMMENT, '');
-  return FORBIDDEN.filter(([, pattern]) => pattern.test(source)).map(([label]) => label);
+  const source = html.replace(COMMENT, '').replace(IGNORED_BLOCK, '');
+  const found = new Set<string>();
+  if (TITLE.test(source)) found.add('<title>');
+  // SignalRGB reads every <meta property> as a control, so Open Graph tags (og:title, …) break too.
+  for (const match of source.matchAll(META_PROPERTY)) {
+    const value = match[1] ?? match[2] ?? match[3] ?? '';
+    found.add(value.includes(':') ? OPEN_GRAPH_LABEL : '<meta property>');
+  }
+  for (const [label, pattern] of FORBIDDEN_META) if (pattern.test(source)) found.add(label);
+  return [...found];
 }
