@@ -5,6 +5,12 @@ const MAX_DEPTH = 4;
 /** Arrays longer than this are logged as their length plus a sample. */
 const LARGE_ARRAY = 64;
 const SAMPLE = 16;
+/** Longer strings are cut, with the number of dropped characters appended. */
+const MAX_STRING = 500;
+/** Objects with more keys keep the first ones plus a `[more]` count. */
+const MAX_KEYS = 200;
+/** Longer lines are split into `[probe] <section>#i/n <chunk>` lines; consoles may truncate. */
+const MAX_LINE = 3000;
 
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 
@@ -43,6 +49,20 @@ const isTypedArray = (value: object): value is ArrayLike<number> =>
 
 const number = (value: number): Json => (Number.isFinite(value) ? value : String(value));
 
+const text = (value: string): string =>
+  value.length > MAX_STRING
+    ? `${value.slice(0, MAX_STRING)}…[+${value.length - MAX_STRING} chars]`
+    : value;
+
+/** First SAMPLE entries of a Map (as [key, value] pairs) or Set. */
+function collectionSample(object: Map<unknown, unknown> | Set<unknown>): unknown[] {
+  const sample: unknown[] = [];
+  object.forEach((item: unknown, key: unknown) => {
+    if (sample.length < SAMPLE) sample.push(object instanceof Map ? [key, item] : item);
+  });
+  return sample;
+}
+
 /** Turns any value into JSON-safe data: no cycles, bounded depth and size, no throwing getters. */
 export function serialize(value: unknown, depth = 0, ancestors: object[] = []): Json {
   try {
@@ -51,8 +71,9 @@ export function serialize(value: unknown, depth = 0, ancestors: object[] = []): 
       case 'undefined':
         return '[undefined]';
       case 'boolean':
-      case 'string':
         return value;
+      case 'string':
+        return text(value);
       case 'number':
         return number(value);
       case 'bigint':
@@ -70,7 +91,11 @@ export function serialize(value: unknown, depth = 0, ancestors: object[] = []): 
       return Object.prototype.toString.call(object);
     }
     if (object instanceof Error) {
-      return { name: object.name, message: object.message, stack: String(object.stack) };
+      return {
+        name: text(object.name),
+        message: text(object.message),
+        stack: text(String(object.stack)),
+      };
     }
     if (isTypedArray(object)) {
       const sample: Json[] = [];
@@ -79,6 +104,15 @@ export function serialize(value: unknown, depth = 0, ancestors: object[] = []): 
     }
     if (depth >= MAX_DEPTH) return '[depth]';
     const inner = ancestors.concat([object]);
+    const isMap = typeof Map !== 'undefined' && object instanceof Map;
+    if (isMap || (typeof Set !== 'undefined' && object instanceof Set)) {
+      const collection = object as Map<unknown, unknown> | Set<unknown>;
+      return {
+        type: isMap ? 'Map' : 'Set',
+        size: collection.size,
+        sample: serialize(collectionSample(collection), depth + 1, inner),
+      };
+    }
     if (Array.isArray(object)) {
       const items: Json[] = [];
       const count = object.length > LARGE_ARRAY ? SAMPLE : object.length;
@@ -88,7 +122,8 @@ export function serialize(value: unknown, depth = 0, ancestors: object[] = []): 
         : items;
     }
     const result: { [key: string]: Json } = {};
-    for (const key of Object.keys(object)) {
+    const keys = Object.keys(object);
+    for (const key of keys.slice(0, MAX_KEYS)) {
       let child: unknown;
       try {
         child = (object as Record<string, unknown>)[key];
@@ -98,6 +133,7 @@ export function serialize(value: unknown, depth = 0, ancestors: object[] = []): 
       }
       result[key] = serialize(child, depth + 1, inner);
     }
+    if (keys.length > MAX_KEYS) result['[more]'] = keys.length - MAX_KEYS;
     return result;
   } catch (error) {
     return `[unserializable: ${errorMessage(error)}]`;
@@ -107,21 +143,48 @@ export function serialize(value: unknown, depth = 0, ancestors: object[] = []): 
 /** Every section logged so far, by name, for the REPORT line. */
 export const sections: Record<string, Json> = {};
 
-/**
- * Logs one `[probe] <section> <json>` line from data that is already serialized, so nesting it
- * (as the REPORT line does) does not apply the depth limit twice. Never throws.
- */
-export function logJson(section: string, json: Json): void {
-  let line: string;
-  try {
-    line = `[probe] ${section} ${JSON.stringify(json)}`;
-  } catch (error) {
-    line = `[probe] ${section} ${JSON.stringify({ unserializable: errorMessage(error) })}`;
-  }
+const print = (line: string): void => {
   try {
     console.log(line);
   } catch {
     // Nowhere left to report to.
+  }
+};
+
+/** Splits text into pieces of at most `size` characters, never inside a surrogate pair. */
+function split(payload: string, size: number): string[] {
+  const chunks: string[] = [];
+  let start = 0;
+  while (start < payload.length) {
+    let end = Math.min(start + size, payload.length);
+    const code = payload.charCodeAt(end - 1);
+    if (end < payload.length && code >= 0xd800 && code <= 0xdbff) end--;
+    chunks.push(payload.slice(start, end));
+    start = end;
+  }
+  return chunks;
+}
+
+/**
+ * Logs one `[probe] <section> <json>` line from data that is already serialized, so nesting it
+ * (as the REPORT line does) does not apply the depth limit twice. A payload longer than MAX_LINE
+ * becomes `[probe] <section>#i/n <chunk>` lines; joining the chunks in order gives the JSON.
+ * Never throws.
+ */
+export function logJson(section: string, json: Json): void {
+  let payload: string;
+  try {
+    payload = JSON.stringify(json);
+  } catch (error) {
+    payload = JSON.stringify({ unserializable: errorMessage(error) });
+  }
+  if (payload.length <= MAX_LINE) {
+    print(`[probe] ${section} ${payload}`);
+    return;
+  }
+  const chunks = split(payload, MAX_LINE);
+  for (let i = 0; i < chunks.length; i++) {
+    print(`[probe] ${section}#${i + 1}/${chunks.length} ${chunks[i]}`);
   }
 }
 

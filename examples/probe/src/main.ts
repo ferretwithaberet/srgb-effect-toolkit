@@ -11,14 +11,12 @@ import { collectStart } from './collect/start';
 import { createTimingRecorder } from './collect/timing';
 import { collectZone } from './collect/zone';
 import { guard, logError, logSection, run } from './log';
-import { logReport } from './report';
+import { startReports } from './report';
 import { now, state } from './state';
 import { startStatus } from './status';
 
 /** How long timing and audio are measured, from the start. */
 const MEASURE_MS = 5000;
-const FIRST_REPORT_MS = 6000;
-const REPORT_EVERY_MS = 30000;
 
 state.startedAt = now();
 run('start', collectStart);
@@ -65,11 +63,6 @@ guard('timing', () => {
   }, MEASURE_MS);
 });
 
-guard('report', () => {
-  setTimeout(() => {
-    logReport();
-    setInterval(logReport, REPORT_EVERY_MS);
-  }, FIRST_REPORT_MS);
-});
+guard('report', startReports);
 
 guard('status', startStatus);

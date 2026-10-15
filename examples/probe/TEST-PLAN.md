@@ -33,25 +33,28 @@ The probe keeps its `console.log` calls (`dropConsole: false`), so unlike a norm
 
 Open SignalRGB's **Console** panel. Every probe message starts with `[probe]` and is a single line: `[probe] <section> <json>`. Copy every line that starts with `[probe]`, in order.
 
+Long messages, such as `REPORT`, are split so the console can't truncate them: they arrive as `[probe] <section>#1/3 <chunk>`, `[probe] <section>#2/3 <chunk>` and so on. A chunked line is not valid JSON on its own; only all its chunks joined in order are. Copy every chunk.
+
 The canvas also shows a small status panel (white text on black): the build (`module` or `classic`), `detectRenderer()`'s result, the measured frame rate once known, when the report was logged, and how many `changed` and `canvas-event` calls arrived. Use it to check the probe is alive, but send the console lines: they hold the data.
 
 What to expect in the console, in order:
 
-| Line                      | When                                                        |
-| ------------------------- | ----------------------------------------------------------- |
-| `alive`                   | First, from a small inline script, before the probe's code. |
-| `window-error`            | On any uncaught error or failed resource load.              |
-| `start`                   | Immediately.                                                |
-| `env`                     | Immediately: user agent, viewport, DPR, renderer.           |
-| `globals`                 | Immediately: globals a clean window doesn't have.           |
-| `properties`              | Immediately: raw property values, handlers before assign.   |
-| `engine`, `meters`        | Immediately: `engine`'s shape and the meter values.         |
-| `changed`                 | On every `on<Prop>Changed` call, including load-time ones.  |
-| `lifecycle`               | On `DOMContentLoaded` and `load`.                           |
-| `canvas-event`            | On every `onCanvasApiEvent` call.                           |
-| `features`                | Within about 3 s, when the Worker and fetch checks end.     |
-| `timing`, `audio`, `zone` | At 5 s.                                                     |
-| `REPORT`                  | At 6 s, then every 30 s. Everything above in one line.      |
+| Line                      | When                                                                                                                  |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `alive`                   | First, from a small inline script, before the probe's code.                                                           |
+| `window-error`            | On any uncaught error or failed resource load.                                                                        |
+| `start`                   | Immediately.                                                                                                          |
+| `env`                     | Immediately: user agent, viewport, DPR, renderer.                                                                     |
+| `globals`                 | Immediately: globals a clean window doesn't have.                                                                     |
+| `properties`              | Immediately: raw property values, handlers before assign.                                                             |
+| `engine`, `meters`        | Immediately: `engine`'s shape and the meter values.                                                                   |
+| `changed`                 | On every `on<Prop>Changed` call, including load-time ones.                                                            |
+| `lifecycle`               | On `DOMContentLoaded` and `load`.                                                                                     |
+| `canvas-event`            | On every `onCanvasApiEvent` call.                                                                                     |
+| `features`                | Within about 3 s, when the Worker and fetch checks end.                                                               |
+| `timing`, `audio`, `zone` | At 5 s.                                                                                                               |
+| `REPORT`                  | At 6 s, 36 s and 66 s: everything above in one message, usually chunked.                                              |
+| `REPORT-delta`            | Every 30 s after that, only when something is new: new `changed` and `canvas-event` records, and globals added since. |
 
 A section that fails logs `[probe] <section>-error {"message":…,"stack":…}` instead; send those too.
 
@@ -107,7 +110,7 @@ Include every console error or warning that is not a `[probe]` line too, such as
 - **`alive` but no `start`.** The probe's main script failed to parse or run. Send the `alive` line, any `window-error` lines and every other console error.
 - **`probe.html` shows nothing, but `probe-classic.html` works.** That is an important result: it means the renderer can't run module scripts. Report it, with both runs' console output.
 - **The canvas text appears, but no lines show in the console.** The console may be filtering messages. Look for a level or text filter, and describe what you see in the console.
-- **Lines look cut off.** The `REPORT` line is long (several kB). If the console truncates it, the individual section lines above it hold the same data; send those.
+- **Lines look cut off.** The probe splits anything longer than about 3000 characters into numbered chunks, so a cut-off line means the console's limit is lower. Say so; the individual section lines above `REPORT` hold the same data.
 
 ## What happens next
 
