@@ -60,6 +60,18 @@ importers:
         specifier: ^8.3.4
         version: 8.3.4(@types/node@26.6.5)
 
+  examples/probe:
+    devDependencies:
+      srgb-effect-kit:
+        specifier: workspace:*
+        version: link:../../packages/srgb-effect-kit
+      typescript:
+        specifier: ~6.0.3
+        version: 6.0.3
+      vite:
+        specifier: ^8.3.4
+        version: 8.3.4(@types/node@26.6.5)
+
   packages/srgb-effect-kit:
     devDependencies:
       '@types/node':

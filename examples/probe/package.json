@@ -1,0 +1,15 @@
+{
+  "name": "@srgb-effect-kit-examples/probe",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && vite build --config vite.config.classic.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "srgb-effect-kit": "workspace:*",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.4"
+  }
+}
