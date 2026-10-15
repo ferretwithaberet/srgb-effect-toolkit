@@ -47,14 +47,25 @@ SignalRGB injects each property as a global and calls `on<Property>Changed` once
 The plugin writes `src/srgb-effect.d.ts`, which types all of these. Commit it.
 
 ```ts
-window.onSpeedChanged = () => console.log(speed); // speed: number
+let current = speed;
+window.onSpeedChanged = () => {
+  current = speed; // speed: number
+};
 ```
+
+The generated file references `srgb-effect-kit/client`, which types `engine`, `onCanvasApiEvent` and the `SRGBVision` meter interface. Keep `src/srgb-effect.d.ts` inside your tsconfig `include`. `typesFile` is relative to the Vite root.
+
+Boolean properties arrive as raw `SRGBBoolean` (`'0' | '1'`, provisional until verified on real SignalRGB). Use `parseBoolean()` for them.
 
 **Do not declare `function onSpeedChanged() {}` at the top of a module.** Module code is not global, so SignalRGB never calls it. The plugin warns when it finds one. Assign to `window` instead; bare assignment (`onSpeedChanged = …`) works too.
 
+## Devtools
+
+A dev-only in-browser devtools drawer is coming. It will cover property controls, audio/screen/meter mocks, canvas API events, renderer/FPS simulation and the visible 320×200 area marker. `srgbEffect({ devtools })` already accepts `true | false | { fireChangedOnLoad?: boolean }`.
+
 ## Options
 
-| Option                              | Default                     |                                                                                                       |
+| Option                              | Default                     | Description                                                                                           |
 | ----------------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `title`, `description`, `publisher` |                             | Effect metadata                                                                                       |
 | `properties`                        | `[]`                        | Controls, in UI order: `number`, `hue`, `boolean`, `color`, `textfield`, `list`                       |
