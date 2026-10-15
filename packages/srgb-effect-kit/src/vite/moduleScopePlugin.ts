@@ -13,11 +13,30 @@ const langFor = (fileName: string): 'js' | 'jsx' | 'ts' | 'tsx' => {
 
 interface Node {
   type: string;
-  id?: { name?: string } | null;
+  id?: { type?: string; name?: string } | null;
   declaration?: Node | null;
+  declarations?: Node[];
 }
 
-/** Names of top-level `function <handler>() {}` declarations, which SignalRGB can never call from a module. */
+/** Names a top-level statement binds at module scope (functions and simple variable declarators). */
+const declaredNames = (statement: Node): (string | undefined)[] => {
+  const declaration =
+    statement.type === 'ExportNamedDeclaration' || statement.type === 'ExportDefaultDeclaration'
+      ? statement.declaration
+      : statement;
+  if (declaration?.type === 'FunctionDeclaration') return [declaration.id?.name];
+  if (declaration?.type === 'VariableDeclaration') {
+    return (declaration.declarations ?? []).map((declarator) =>
+      declarator.id?.type === 'Identifier' ? declarator.id.name : undefined,
+    );
+  }
+  return [];
+};
+
+/**
+ * Handler names declared at module scope (`function`, `const`, `let`, `var`, plain or exported).
+ * Module bindings are not globals, so SignalRGB can never call them.
+ */
 export function findModuleScopedHandlers(
   code: string,
   fileName: string,
@@ -27,10 +46,9 @@ export function findModuleScopedHandlers(
   if (result.errors.length > 0) return [];
   const found: string[] = [];
   for (const statement of result.program.body as unknown as Node[]) {
-    const declaration =
-      statement.type === 'ExportNamedDeclaration' ? statement.declaration : statement;
-    const name = declaration?.type === 'FunctionDeclaration' ? declaration.id?.name : undefined;
-    if (name !== undefined && names.has(name)) found.push(name);
+    for (const name of declaredNames(statement)) {
+      if (name !== undefined && names.has(name)) found.push(name);
+    }
   }
   return found;
 }
@@ -55,7 +73,7 @@ export function moduleScopePlugin(options: ResolvedOptions): Plugin {
       }
       for (const name of findModuleScopedHandlers(code, file, names)) {
         this.warn(
-          `[srgb-effect] ${path.relative(root, file)}: "function ${name}()" is module-scoped and will never be called by SignalRGB. Assign it instead: window.${name} = () => { … }`,
+          `[srgb-effect] ${path.relative(root, file)}: "${name}" is declared at module scope and will never be called by SignalRGB. Assign it instead: window.${name} = …`,
         );
       }
       return null;

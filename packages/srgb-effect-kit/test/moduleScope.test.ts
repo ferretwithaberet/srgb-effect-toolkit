@@ -24,8 +24,16 @@ describe('module-scope handler warning', () => {
       { plugins: plugins() },
     );
     expect(warnings.join('\n')).toMatch(
-      /"function onSpeedChanged\(\)" is module-scoped .* window\.onSpeedChanged = /s,
+      /main\.ts: "onSpeedChanged" is declared at module scope and will never be called by SignalRGB\. Assign it instead: window\.onSpeedChanged = …/,
     );
+  });
+
+  it('warns about module-scoped handler variables', async () => {
+    const { warnings } = await buildFixture(
+      root('export const onSpeedChanged = () => { document.title = "x"; };'),
+      { plugins: plugins() },
+    );
+    expect(warnings.join('\n')).toMatch(/"onSpeedChanged" is declared at module scope/);
   });
 
   it('stays quiet for window assignments', async () => {
@@ -33,6 +41,6 @@ describe('module-scope handler warning', () => {
       root('window.onSpeedChanged = () => { document.title = "x"; };'),
       { plugins: plugins() },
     );
-    expect(warnings.join('\n')).not.toMatch(/module-scoped/);
+    expect(warnings.join('\n')).not.toMatch(/module scope/);
   });
 });

@@ -67,7 +67,7 @@ Keep `src/srgb-effect.d.ts` inside your tsconfig `include`. `typesFile` is relat
 
 Boolean properties arrive as raw `SRGBBoolean` (`'0' | '1'`, provisional until verified on real SignalRGB). Use `parseBoolean()` for them.
 
-**Do not declare `function onSpeedChanged() {}` at the top of a module.** Module code is not global, so SignalRGB never calls it. The plugin warns when it finds one. Assign to `window` instead; bare assignment (`onSpeedChanged = …`) works too.
+**Do not declare `function onSpeedChanged() {}` or `const onSpeedChanged = …` at the top of a module.** Module code is not global, so SignalRGB never calls it. The plugin warns when it finds one. Assign to `window` instead; bare assignment (`onSpeedChanged = …`) works too.
 
 ## Devtools
 
