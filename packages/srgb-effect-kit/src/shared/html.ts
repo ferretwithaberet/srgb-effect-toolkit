@@ -26,6 +26,22 @@ export function injectIntoHead(html: string, markup: string): string {
   return `${block}${html}`;
 }
 
+const WRAPPER_START = /^\s*(?:<!--[\s\S]*?-->\s*)*<!doctype[^>]*>\s*/i;
+const HTML_OPEN_START = /^\s*<html(?:\s[^>]*)?>\s*/i;
+const HTML_CLOSE_END = /\s*<\/html\s*>\s*$/i;
+
+/**
+ * Removes the leading doctype (with any whitespace or comments before it), the opening <html> tag
+ * and the closing </html> tag. SignalRGB does not apply an effect file that has them, so the output
+ * must start at <head>. A document without a wrapper is returned unchanged.
+ */
+export function stripDocumentWrapper(html: string): string {
+  let out = html.replace(WRAPPER_START, '').replace(HTML_OPEN_START, '');
+  if (out === html && !HTML_CLOSE_END.test(html)) return html;
+  out = out.replace(HTML_CLOSE_END, '\n');
+  return out;
+}
+
 /** Inserts markup before the last </body>, or appends it when the document has none. */
 export function injectBeforeBodyEnd(html: string, markup: string): string {
   let last: RegExpExecArray | undefined;

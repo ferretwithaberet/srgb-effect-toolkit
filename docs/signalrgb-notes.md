@@ -34,6 +34,10 @@ SignalRGB shows only the top-left 320×200 pixels of the page and samples that a
 
 SignalRGB's testing requirements ask for a clean console: an effect should log nothing besides SignalRGB's own "Loading Effect" message. The build removes `console.*` calls by default for this reason; see [`dropConsole`](build.md#dropconsole-and-minification). Uncaught errors also show up in the console, so make sure your effect doesn't throw inside SignalRGB.
 
+## No doctype or `<html>` wrapper
+
+An effect file that starts with `<!doctype html><html>` shows up in SignalRGB's effect list, but clicking it does nothing and the effect never applies. The same file without the doctype and the `<html>` wrapper works. SignalRGB's documentation only ever shows top-level `<head>`, `<body>` and `<script>`. Verified on real SignalRGB, 2026-10-16, by bisecting; meters and inline scripts in `<head>` were ruled out. The build therefore strips the doctype, `<html>` and `</html>` (see [Build](build.md)), so the output starts with `<head>`. The file then renders in quirks mode in SignalRGB; `pnpm dev` keeps the doctype.
+
 ## Pending verification on real SignalRGB
 
 A probe effect runs inside SignalRGB with both renderers and records how it really behaves. Until its results are in, these points are provisional. Where the toolkit depends on one of them, it keeps it behind a single option, helper or type, so it can change in one place once verified:

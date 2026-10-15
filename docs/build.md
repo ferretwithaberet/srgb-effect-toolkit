@@ -14,6 +14,7 @@ To get there, the plugin changes how Vite builds:
 - **One script.** Code splitting is off, so dynamic `import()` calls are bundled into the main script instead of creating extra files. Vite's module preload helper is off too.
 - **No devtools.** The [devtools](devtools.md) exist only in `pnpm dev`; nothing of them reaches the build.
 - **No `public/` copy.** Files in `public/` are not copied, because only the HTML file reaches SignalRGB. The build warns when `public/` has files; see [below](#public-files-are-left-out).
+- **No doctype or `<html>` wrapper.** The build strips the leading `<!doctype>`, the `<html>` tag (with its attributes) and `</html>`, so the file starts with `<head>`. SignalRGB lists an effect file that has them but does not apply it when you click it (verified 2026-10-16). Keep `index.html` as the normal create-vite page; `pnpm dev` keeps the doctype, so the browser preview renders in standards mode.
 - **Generated `<head>`.** The `<title>` and `<meta>` tags from your options are inserted at the start of `<head>`, after a leading `<meta charset>` (browsers expect the charset first). If `index.html` has no `<head>`, one is created.
 - **A prelude script.** A small classic script (always a plain `<script>`, in both `script` modes) runs before your code and creates every `on<Prop>Changed` global and `onCanvasApiEvent` that does not exist yet, set to `undefined`. That way a bare `onSpeedChanged = …` assignment does not throw in strict mode. See [Globals](globals.md#change-handlers-onpropchanged).
 - **Your code at the end of `<body>`.** The bundled script follows the prelude, so the DOM above it, such as your canvas, exists when it runs. A `</script>` inside your code is escaped as `<\/script>` so it cannot end the tag early; the same applies to `</style>` in CSS.
@@ -22,9 +23,7 @@ For the [getting-started](getting-started.md) project, `dist/my-effect.html` loo
 
 <!-- prettier-ignore -->
 ```html
-<!doctype html>
-<html lang="en">
-  <head>
+<head>
     <meta charset="UTF-8" />
 <title>My Effect</title>
 <meta description="A scrolling rainbow" />
@@ -45,7 +44,6 @@ For the [getting-started](getting-started.md) project, `dist/my-effect.html` loo
 var e=(e,t,n,r)=>r===void 0?`hsl(${e}, ${t}%, ${n}%)`:…
 </script>
 </body>
-</html>
 ```
 
 ## `script`: classic and module

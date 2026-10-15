@@ -1,7 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Plugin, Rolldown } from 'vite';
-import { generatePrelude, injectBeforeBodyEnd, injectIntoHead, serializeHead } from '../shared';
+import {
+  generatePrelude,
+  injectBeforeBodyEnd,
+  injectIntoHead,
+  serializeHead,
+  stripDocumentWrapper,
+} from '../shared';
 import { inlineAssets, scriptTag } from './inline';
 import type { ResolvedOptions } from './options';
 
@@ -135,6 +141,8 @@ export function buildPlugin(options: ResolvedOptions): Plugin {
       let html = injectBeforeBodyEnd(result.html, scripts.join('\n'));
       // Final string pass: meters need non-void <meta> … </meta>, which an HTML parser would mangle.
       html = injectIntoHead(html, serializeHead(options.manifest));
+      // SignalRGB lists but never applies an effect file that starts with a doctype and <html>.
+      html = stripDocumentWrapper(html);
 
       for (const fileName of result.inlined) delete bundle[fileName];
       delete bundle[htmlFile.fileName];

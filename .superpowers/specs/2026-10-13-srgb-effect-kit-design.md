@@ -338,7 +338,7 @@ It then logs the output size.
 
 - `build.target` comes from the `target` option (provisional `es2020`).
 - `dropConsole` maps to the bundler's console/debugger drop option, to meet the clean-console requirement.
-- The standard doctype is kept by default. The probe verifies both the doctype and the no-doctype variant.
+- Doctype: verified 2026-10-16 in real SignalRGB, an effect file starting with `<!doctype html><html>` is listed but never applies when clicked; without the doctype and `<html>` wrapper it works. Decision (2026-10-16): the build strips the doctype, `<html …>` and `</html>` in its final string pass (`stripDocumentWrapper`), so output starts with `<head>`. Dev serving keeps the doctype for standards-mode preview.
 
 ## 9. Probe effect (`examples/probe`)
 
@@ -375,7 +375,7 @@ Every collector is wrapped: a failure logs `<section>-error {message, stack}` an
 - **Console only.** Every line is `[probe] <section> <json>`, one line each. The serializer never throws: typed arrays and arrays over 64 entries become length plus a 16-value sample, functions become `'function'`, `NaN`/`Infinity` become strings, cycles become `'[cycle]'`, depth is limited to 4.
 - **Canvas status.** The 320×200 canvas shows the title, build tag, `detectRenderer()`, the measured Hz, when the report was logged and the `changed`/`canvas-event` counts, redrawn every second. It confirms the probe is alive; the data is in the console.
 - **Test plan.** `examples/probe/TEST-PLAN.md` is the protocol for the user: build and install, where to read the console, a run checklist (U1–U6 for UltraLight, Q1–Q6 for QtWebEngine: FPS 60/30/20, silence, the classic build, a restart for storage persistence, control changes and a `curl` canvas API event), what to send back, and troubleshooting. The user copies the `[probe]` lines of each run and hands them back.
-- Not covered by this version: the no-doctype variant (§8.2). Both builds keep the standard doctype.
+- The doctype question is settled (§8.2): both builds are emitted without the doctype and `<html>` wrapper.
 - **Hardening after review (2026-10-16).** An inline ES5 `<head>` script logs `alive` before the bundle and hooks errors as `window-error`. Lines over about 3000 characters are split into `<section>#i/n` chunks; strings are capped at 500 characters and objects at 200 keys. REPORT is logged in full three times (about 6 s, 36 s, 66 s), then only as `REPORT-delta`. `env`, `engine`, `meters` and `properties` are logged again at 5 s (`…@5s`) and in each REPORT (`…AtReport`). Features log per group (`features-syntax`, `-builtins`, `-canvas`, `-storage` at start; `-webgl`, `-worker`, `-fetch` after the timing window), with ES2015–ES2019 syntax checks and a `functionConstructor` control. `meters-live` samples meters every frame; `engineUpdates` measures the audio data refresh rate; timing adds `performance.now()` intervals and median/p95.
 
 ### 9.3 Where findings go

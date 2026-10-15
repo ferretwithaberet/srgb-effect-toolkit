@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { findForbiddenHeadTags, injectBeforeBodyEnd, injectIntoHead } from './html';
+import {
+  findForbiddenHeadTags,
+  injectBeforeBodyEnd,
+  injectIntoHead,
+  stripDocumentWrapper,
+} from './html';
 
 describe('injectIntoHead', () => {
   it('inserts right after the opening head tag', () => {
@@ -109,5 +114,45 @@ describe('findForbiddenHeadTags', () => {
     expect(findForbiddenHeadTags('<meta property="speed" type="number">')).toEqual([
       '<meta property>',
     ]);
+  });
+});
+
+describe('stripDocumentWrapper', () => {
+  const inner = '<head><title>T</title></head>\n<body></body>';
+
+  it('removes a lowercase or uppercase doctype and the html tags', () => {
+    expect(stripDocumentWrapper(`<!doctype html><html>${inner}</html>`)).toBe(`${inner}\n`);
+    expect(stripDocumentWrapper(`<!DOCTYPE HTML>\n<HTML>${inner}</HTML>`)).toBe(`${inner}\n`);
+  });
+
+  it('removes html attributes such as lang', () => {
+    expect(stripDocumentWrapper(`<!doctype html>\n<html lang="en">\n${inner}\n</html>`)).toBe(
+      `${inner}\n`,
+    );
+  });
+
+  it('ignores leading whitespace and newlines', () => {
+    expect(stripDocumentWrapper(`\n \t\n<!doctype html><html>${inner}</html>`)).toBe(`${inner}\n`);
+  });
+
+  it('drops a comment before the doctype', () => {
+    expect(stripDocumentWrapper(`<!-- hi -->\n<!doctype html><html>${inner}</html>`)).toBe(
+      `${inner}\n`,
+    );
+  });
+
+  it('removes </html> with trailing whitespace', () => {
+    expect(stripDocumentWrapper(`<html>${inner}</html>  \n\n`)).toBe(`${inner}\n`);
+  });
+
+  it('leaves a document without a wrapper unchanged', () => {
+    const html = `\n${inner}\n<!-- keep -->\n`;
+    expect(stripDocumentWrapper(html)).toBe(html);
+  });
+
+  it('keeps comments and content inside the document', () => {
+    expect(stripDocumentWrapper('<!doctype html><html><!-- a --><body>x</body></html>')).toBe(
+      '<!-- a --><body>x</body>\n',
+    );
   });
 });

@@ -48,6 +48,31 @@ const buildOnly = async (root: string, opts: Partial<SrgbEffectOptions> = {}, ba
 };
 
 describe('srgbEffect build', () => {
+  it('strips the doctype and html wrapper, which SignalRGB will not apply', async () => {
+    const root = createFixture({
+      'index.html':
+        '<!DOCTYPE html>\n<html lang="en">\n<head><meta charset="UTF-8"></head>\n<body><canvas></canvas><script type="module" src="/src/main.ts"></script></body>\n</html>\n',
+      'src/main.ts': 'document.title = "x";',
+    });
+    const { html } = await buildOnly(root);
+    expect(html.trimStart().startsWith('<head>')).toBe(true);
+    expect(html).not.toMatch(/<!doctype|<html|<\/html/i);
+    expect(html).toContain('<title>Build Test</title>');
+    expect(html.match(/<script/g)).toHaveLength(2);
+    expect(html).toContain('<canvas></canvas>');
+  });
+
+  it('starts with a created head when the source has none', async () => {
+    const root = createFixture({
+      'index.html':
+        '<!doctype html><html><body><script type="module" src="/main.ts"></script></body></html>',
+      'main.ts': 'document.title = "x";',
+    });
+    const { html } = await buildOnly(root);
+    expect(html.trimStart().startsWith('<head>')).toBe(true);
+    expect(html).not.toMatch(/<!doctype|<html|<\/html/i);
+  });
+
   it('emits exactly one self-contained HTML file', async () => {
     const { files, html } = await buildOnly(project('document.title = String(window.speed);'));
     expect([...files.keys()]).toEqual(['build-test.html']);
@@ -73,7 +98,7 @@ describe('srgbEffect build', () => {
     );
     expect(body).toMatch(/<\/script>\n<script>\n"use strict";\(function\(\)/);
     expect(html).not.toContain('type="module"');
-    expect(html.trimEnd()).toMatch(/<\/script>\n<\/body><\/html>$/);
+    expect(html.trimEnd()).toMatch(/<\/script>\n<\/body>$/);
   });
 
   it('runs classic scripts in strict mode, like modules', async () => {
@@ -100,7 +125,7 @@ describe('srgbEffect build', () => {
     );
     expect(body).toMatch(/<\/script>\n<script type="module">\n/);
     expect(html.match(/<script type="module">/g)).toHaveLength(1);
-    expect(html.trimEnd()).toMatch(/<\/script>\n<\/body><\/html>$/);
+    expect(html.trimEnd()).toMatch(/<\/script>\n<\/body>$/);
   });
 
   it('emits a module script when script is "module"', async () => {
