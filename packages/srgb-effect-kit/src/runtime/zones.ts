@@ -1,5 +1,4 @@
-import { getEngine } from './engine';
-import type { EngineZone } from './types';
+import type { EngineZone } from './globals';
 
 export const ZONE_COLUMNS = 28;
 export const ZONE_ROWS = 20;
@@ -20,7 +19,7 @@ const read = (zone: Partial<EngineZone> | undefined, index: number): ZoneColor =
 export function getZone(
   x: number,
   y: number,
-  zone: Partial<EngineZone> | undefined = getEngine()?.zone,
+  zone: Partial<EngineZone> | undefined = globalThis.engine?.zone,
 ): ZoneColor {
   if (
     !Number.isInteger(x) ||
@@ -37,6 +36,8 @@ export function getZone(
   return read(zone, y * ZONE_COLUMNS + x);
 }
 
-export function getZones(zone: Partial<EngineZone> | undefined = getEngine()?.zone): ZoneColor[] {
+export function getZones(
+  zone: Partial<EngineZone> | undefined = globalThis.engine?.zone,
+): ZoneColor[] {
   return Array.from({ length: ZONE_COLUMNS * ZONE_ROWS }, (_, index) => read(zone, index));
 }

@@ -1,4 +1,4 @@
-import type { SRGBBoolean } from './types';
+import type { SRGBBoolean } from './globals';
 
 /** Normalizes a SignalRGB boolean property, tolerating every plausible raw form. */
 export const parseBoolean = (value: SRGBBoolean | boolean | number | string): boolean => {

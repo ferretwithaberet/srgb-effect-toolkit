@@ -1,6 +1,6 @@
-import { createLoop, getCanvas, hsl, parseBoolean } from 'srgb-effect-kit';
+import { createLoop, hsl, parseBoolean } from 'srgb-effect-kit';
 
-const { ctx } = getCanvas();
+const ctx = document.querySelector('canvas')!.getContext('2d')!;
 const COLUMN = 4;
 let hue = baseHue;
 

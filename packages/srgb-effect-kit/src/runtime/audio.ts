@@ -1,5 +1,4 @@
-import { getEngine } from './engine';
-import type { EngineAudio } from './types';
+import type { EngineAudio } from './globals';
 
 export const FREQUENCY_BINS = 200;
 /**
@@ -8,7 +7,9 @@ export const FREQUENCY_BINS = 200;
  */
 export const SILENCE_SUM_THRESHOLD = 50;
 
-export function isSilent(audio: Partial<EngineAudio> | undefined = getEngine()?.audio): boolean {
+export function isSilent(
+  audio: Partial<EngineAudio> | undefined = globalThis.engine?.audio,
+): boolean {
   if (!audio) return true;
   if (audio.level !== undefined && audio.level <= -100) return true;
   const { freq } = audio;
@@ -25,7 +26,7 @@ export function isSilent(audio: Partial<EngineAudio> | undefined = getEngine()?.
 
 /** 200 sanitized bands: non-finite or negative values become 0 and the rest clamp to 255. Range is provisional until probed. */
 export function getFrequencies(
-  audio: Partial<EngineAudio> | undefined = getEngine()?.audio,
+  audio: Partial<EngineAudio> | undefined = globalThis.engine?.audio,
 ): number[] {
   const freq = audio?.freq;
   const out = new Array<number>(FREQUENCY_BINS).fill(0);

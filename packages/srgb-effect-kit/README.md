@@ -53,7 +53,17 @@ window.onSpeedChanged = () => {
 };
 ```
 
-The generated file references `srgb-effect-kit/client`, which types `engine`, `onCanvasApiEvent` and the `SRGBVision` meter interface. Keep `src/srgb-effect.d.ts` inside your tsconfig `include`. `typesFile` is relative to the Vite root.
+The generated file references `srgb-effect-kit/client`, which brings SignalRGB's own globals into scope. They are typed once, in the runtime's globals module, so there are no wrappers to learn: use them directly.
+
+```ts
+const level = engine.audio.level; // or window.engine.audio.level
+const ctx = document.querySelector('canvas')!.getContext('2d')!;
+window.onCanvasApiEvent = ({ sender, event }) => {};
+```
+
+`engine` is typed as `SRGBEngine` (`audio`, `zone`, and `vision`, whose `SRGBVision` interface gains one key per meter). It only exists inside SignalRGB, so guard it (`globalThis.engine?.audio`) in code that also runs in a plain browser. The `SRGBEngine`, `EngineAudio`, `EngineZone`, `CanvasApiEvent` and `SRGBBoolean` types are also exported from `srgb-effect-kit`.
+
+Keep `src/srgb-effect.d.ts` inside your tsconfig `include`. `typesFile` is relative to the Vite root.
 
 Boolean properties arrive as raw `SRGBBoolean` (`'0' | '1'`, provisional until verified on real SignalRGB). Use `parseBoolean()` for them.
 
@@ -83,7 +93,6 @@ In the default classic mode, the build fails with an `[srgb-effect]` message on 
 ```ts
 import {
   createLoop,
-  getCanvas,
   hsl,
   isSilent,
   getFrequencies,
@@ -95,11 +104,10 @@ import {
 
 | Area     | Exports                                                                                                 |
 | -------- | ------------------------------------------------------------------------------------------------------- |
-| Canvas   | `getCanvas({ id?, context? })`                                                                          |
 | Loop     | `createLoop(frame, { maxFps? })`, where `frame` receives `{ dt, time, frameCount }`                     |
 | Renderer | `detectRenderer()` returns `'ultralight' \| 'qtwebengine' \| 'browser'`; also `isSignalRGB()`           |
-| Audio    | `isSilent()`, `getFrequencies()`                                                                        |
-| Screen   | `getZone(x, y)` and `getZones()` over the 28×20 grid                                                    |
+| Audio    | `isSilent()`, `getFrequencies()`, reading `engine.audio` unless you pass one                            |
+| Screen   | `getZone(x, y)` and `getZones()` over the 28×20 grid of `engine.zone`                                   |
 | Meters   | `createMeter(size, callback)`, which debounces `engine.vision.<meter>` readings                         |
 | Color    | `hexToRgb`, `rgbToHex`, `rgbToHsl`, `hslToRgb`, `hexToHsl`, `hslToHex`, `hsl()`, `rgb()`, `lerpColor()` |
 | Booleans | `parseBoolean()`                                                                                        |

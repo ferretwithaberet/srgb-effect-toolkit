@@ -32,7 +32,7 @@ Prior art: `/home/ferret/Projects/Github/butterchurn-srgb` (hand-written `signal
 | Package name | `srgb-effect-kit` (name must contain "effect"). |
 | Source of truth | Effect manifest is passed as Vite plugin options in `vite.config.ts`. Plugin generates `<meta>` tags and a committed `.d.ts` declaring globals. |
 | Ordering | `properties` and `meters` are **arrays** (order = UI order / declaration order), not objects. |
-| Runtime philosophy | No wrappers over SignalRGB mechanics. Properties, `on<Prop>Changed`, `onCanvasApiEvent`, `engine` are used directly as globals; the toolkit only types them and provides standalone utilities. |
+| Runtime philosophy | The toolkit mostly types what SignalRGB provides, and offers utilities only where they are necessary or significantly ease effect creation. No thin wrappers: properties, `on<Prop>Changed`, `onCanvasApiEvent` and `engine` (or `window.engine`) are used directly as typed globals. |
 | Projects | One effect per Vite project. |
 | Canvas | Optional. No validation of canvas presence or size. Content may extend beyond 320×200; SignalRGB shows only the top-left 320×200. |
 | Testing against real SignalRGB | Windows VM running SignalRGB is the source of truth (probe effect). Daily dev happens in the browser with devtools. |
@@ -125,7 +125,7 @@ srgb-effect-toolkit/                  pnpm workspace (not published)
 |---|---|---|
 | `srgb-effect-kit` | runtime utilities (§7) | browser, zero dependencies |
 | `srgb-effect-kit/vite` | `srgbEffect()` plugin, option types | Node, `vite` peer dependency |
-| `srgb-effect-kit/client` | ambient types: `engine`, `onCanvasApiEvent`, `SRGBVision` | types only |
+| `srgb-effect-kit/client` | ambient types: `engine`, `onCanvasApiEvent`, `SRGBVision`, `SRGBBoolean` (re-exposed from the runtime's globals module) | types only |
 
 The devtools are built as an internal dist entry. The plugin resolves that entry by file path.
 
@@ -283,11 +283,10 @@ Two pitfalls follow from effect code being bundled as modules.
 
 ## 7. Runtime utilities (`srgb-effect-kit`)
 
-These are standalone functions. Nothing here is required to use SignalRGB features.
+These are standalone functions. Nothing here is required to use SignalRGB features. There is no canvas or engine accessor: use `document.querySelector('canvas')` and the typed `engine` global directly. The audio and zone helpers default to `globalThis.engine` (guarded, since it is undefined outside SignalRGB) and also accept an explicit argument.
 
 | Area | API |
 |---|---|
-| Canvas | `getCanvas(opts?: { id?: string; context?: '2d' \| 'webgl' \| 'webgl2' })` → `{ canvas, ctx }`. Defaults: first `<canvas>`, 2D context. Throws a clear error if none is found. |
 | Loop | `createLoop(frame: (info: { dt: number; time: number; frameCount: number }) => void, opts?: { maxFps?: number })` → `{ start(), stop(), setMaxFps(n), running }`. Built on rAF; the FPS cap uses time accumulation (no lodash). `dt` is in seconds. |
 | Renderer | `detectRenderer(): 'ultralight' \| 'qtwebengine' \| 'browser'`, `isSignalRGB(): boolean`. Based on the UA, using signatures recorded by the probe. |
 | Audio | `isSilent()`, using the level check and spectrum-sum threshold proven in butterchurn-srgb. `getFrequencies(): number[]` returns 200 sanitized values; garbage and non-finite entries become 0, and final range semantics come from the probe. |
@@ -296,14 +295,15 @@ These are standalone functions. Nothing here is required to use SignalRGB featur
 | Color | `hexToRgb`, `rgbToHex`, `rgbToHsl`, `hslToRgb`, `hexToHsl`, `hslToHex`, `hsl(h, s, l, a?)`, `rgb(r, g, b, a?)`, `lerpColor(a, b, t)`. |
 | Booleans | `parseBoolean(v: SRGBBoolean \| boolean \| number): boolean`. Tolerates every plausible raw form until the probe settles the real one. |
 
-`srgb-effect-kit/client` declares:
+The globals are typed once, in the runtime's globals module (`src/runtime/globals.ts`), whose `declare global` block ships in `dist/runtime/index.d.ts`. `srgb-effect-kit/client` only brings that block into scope (`/// <reference path="./dist/runtime/index.d.ts" />`); it does not redeclare anything. The module also exports `SRGBEngine`, `EngineAudio`, `EngineZone`, `CanvasApiEvent` and `SRGBBoolean`.
 
 ```ts
+// src/runtime/globals.ts
 declare global {
-  var engine: SRGBEngine;   // { audio: SRGBEngineAudio; zone: SRGBEngineZone; vision: SRGBVision }
-  var onCanvasApiEvent: ((event: { sender: string; event: string }) => void) | undefined;
   interface SRGBVision {}   // augmented by generated types
   type SRGBBoolean = '0' | '1'; // provisional (matches butterchurn-srgb usage); finalized by probe
+  var engine: SRGBEngine;   // { audio: EngineAudio; zone: EngineZone; vision: SRGBVision }
+  var onCanvasApiEvent: ((event: CanvasApiEvent) => void) | undefined;
 }
 ```
 

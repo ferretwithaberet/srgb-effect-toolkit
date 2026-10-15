@@ -1,6 +1,6 @@
-import { createLoop, getCanvas, getFrequencies, hexToHsl, hsl, isSilent } from 'srgb-effect-kit';
+import { createLoop, getFrequencies, hexToHsl, hsl, isSilent } from 'srgb-effect-kit';
 
-const { ctx } = getCanvas();
+const ctx = document.querySelector('canvas')!.getContext('2d')!;
 const BARS = 40;
 const BAR_WIDTH = 320 / BARS;
 
