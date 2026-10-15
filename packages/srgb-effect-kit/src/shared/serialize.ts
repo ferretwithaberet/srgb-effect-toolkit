@@ -78,7 +78,8 @@ export function serializeMeter(m: MeterDef): string {
         ['x', r.x],
         ['y', r.y],
         ['width', r.width],
-        ['height', r.height],
+        // Linear meters are a single row of pixels; SignalRGB has no height for them.
+        ['height', m.type === 'linear' ? undefined : r.height],
       ])} />`,
   );
   return [`${open}>`, ...children, '</meta>'].join('\n');

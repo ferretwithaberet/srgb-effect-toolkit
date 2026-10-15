@@ -20,7 +20,8 @@ export type CheckedProperties<P extends readonly PropertyDef[]> = P & {
 export function srgbEffect<const P extends readonly PropertyDef[] = readonly []>(
   options: Omit<SrgbEffectOptions, 'properties'> & { properties?: CheckedProperties<P> },
 ): Plugin[] {
+  // Validate first: untyped configs must get manifest issues, not a TypeError from resolveOptions.
+  assertValidManifest(options);
   const resolved = resolveOptions(options);
-  assertValidManifest(resolved.manifest);
   return [corePlugin(resolved), buildPlugin(resolved), moduleScopePlugin(resolved)];
 }

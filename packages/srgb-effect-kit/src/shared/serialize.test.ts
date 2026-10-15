@@ -147,6 +147,21 @@ describe('serializeMeter', () => {
       ].join('\n'),
     );
   });
+
+  it('never writes a height on linear meter resolutions', () => {
+    const meter = {
+      meter: 'm',
+      type: 'linear',
+      x: 0.1,
+      y: 0.2,
+      width: 0.3,
+      h: [0, 1],
+      s: [0, 1],
+      l: [0, 1],
+      resolutions: [{ size: '1920x1080', height: 0.5 }],
+    } as const;
+    expect(serializeMeter(meter)).toContain('  <resolution size="1920x1080" />');
+  });
 });
 
 describe('serializeHead', () => {

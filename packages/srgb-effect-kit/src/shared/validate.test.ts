@@ -210,6 +210,118 @@ describe('collectManifestIssues', () => {
   });
 });
 
+describe('untyped (JavaScript) manifests', () => {
+  const loose = (manifest: unknown) => () => collectManifestIssues(manifest as EffectManifest);
+
+  it('reports a missing or non-string title instead of throwing', () => {
+    expect(loose({})).not.toThrow();
+    expect(loose({})()).toEqual(['title: must be a string']);
+    expect(loose({ title: 42 })()).toEqual(['title: must be a string']);
+    expect(loose(null)()).toEqual(['manifest: must be an object']);
+  });
+
+  it('reports non-string description and publisher', () => {
+    expect(loose({ title: 'T', description: 1, publisher: {} })()).toEqual([
+      'description: must be a string',
+      'publisher: must be a string',
+    ]);
+  });
+
+  it('reports non-array properties and meters', () => {
+    expect(loose({ title: 'T', properties: {}, meters: 'm' })()).toEqual([
+      'properties: must be an array',
+      'meters: must be an array',
+    ]);
+  });
+
+  it('reports malformed properties, naming the entry', () => {
+    const run = loose({
+      title: 'T',
+      properties: [
+        null,
+        { property: 'a', type: 'number', min: 0, max: 1, default: 0 },
+        { type: 'boolean', label: 'B', default: true },
+        { property: 'c', type: 'slider', label: 'C', default: 1 },
+        { property: 'd', type: 'list', label: 'D', default: 'x' },
+        { property: 'e', type: 'list', label: 'E', values: ['x', 1], default: 'x' },
+        { property: 'f', type: 'hue', label: 'F', min: '0', default: '10' },
+        { property: 'g', type: 'boolean', label: 'G', default: 'yes' },
+        { property: 'h', type: 'color', label: 'H', default: 255 },
+        { property: 'i', type: 'textfield', label: 'I', default: 0, tooltip: 1 },
+        { property: 'j', type: 'number', label: 'J', min: '0', max: 1, default: 0 },
+      ],
+    });
+    expect(run).not.toThrow();
+    expect(run()).toEqual([
+      'properties[0]: must be an object',
+      'properties[1] ("a"): label must be a string',
+      'properties[2]: property must be a string',
+      'properties[3] ("c"): unknown type "slider"',
+      'properties[4] ("d"): values must be an array of strings',
+      'properties[5] ("e"): values must be an array of strings',
+      'properties[6] ("f"): default must be a number',
+      'properties[6] ("f"): min and max must be numbers',
+      'properties[7] ("g"): default must be a boolean',
+      'properties[8] ("h"): default must be a #rrggbb hex color (got "255")',
+      'properties[9] ("i"): default must be a string',
+      'properties[9] ("i"): tooltip must be a string',
+      'properties[10] ("j"): min, max and default must be whole numbers',
+    ]);
+  });
+
+  it('reports malformed meters, naming the entry', () => {
+    const run = loose({
+      title: 'T',
+      meters: [
+        'm',
+        { meter: 'a', type: 'ocr', x: 0, y: 0, width: 0.1, height: 0.1 },
+        { meter: 'b', type: 'linear', x: 0, y: 0, width: 0.1, s: [0, 1], l: [0, 1, 2] },
+        { meter: 'c', type: 'area', x: 0, y: '0', width: 0.1, h: [0, 1], s: [0, 1], l: [0, 1] },
+        { meter: 'd', type: 'ocr_textmatch', x: 0, y: 0, width: 0.1, height: 0.1 },
+        { type: 'ocr_numeric', x: 0, y: 0, width: 0.1, height: 0.1, confidence: '50' },
+        { meter: 'e', type: 'ocr_numeric', x: 0, y: 0, width: 0.1, height: 0.1, tags: 'a' },
+        { meter: 'f', type: 'ocr_numeric', x: 0, y: 0, width: 0.1, height: 0.1, resolutions: [1] },
+        { ...linear({ meter: 'g' }), hdr: 'bright' },
+      ],
+    });
+    expect(run).not.toThrow();
+    expect(run()).toEqual([
+      'meters[0]: must be an object',
+      'meters[1] ("a"): unknown type "ocr"',
+      'meters[2] ("b"): h must be a [min, max] pair of numbers',
+      'meters[2] ("b"): l must be a [min, max] pair of numbers',
+      'meters[3] ("c"): y must be a finite number (got "0")',
+      'meters[3] ("c"): height must be a finite number (got undefined)',
+      'meters[4] ("d"): string must be a string',
+      'meters[5]: meter must be a string',
+      'meters[5]: confidence must be a number between 0 and 100',
+      'meters[6] ("e"): tags must be an array of strings',
+      'meters[7] ("f") resolutions[0]: must be an object',
+      'meters[8] ("g"): hdr must be an object with h, s and l ranges',
+    ]);
+  });
+
+  it('reports the entry through assertValidManifest', () => {
+    expect(() =>
+      assertValidManifest({ title: 'T', properties: [{ property: 'x' }] } as never),
+    ).toThrow(/properties\[0\] \("x"\): label must be a string/);
+  });
+});
+
+describe('meter tags and linear resolutions', () => {
+  it('rejects tags containing commas', () => {
+    expect(issues(withMeters(linear({ tags: ['ok', 'a,b'] })))).toEqual([
+      'meters[0] ("m"): tag "a,b" must not contain commas (SignalRGB separates tags with commas)',
+    ]);
+  });
+
+  it('rejects height on a linear meter resolution', () => {
+    expect(
+      issues(withMeters(linear({ resolutions: [{ size: '1920x1080', height: 0.1 }] }))),
+    ).toEqual(['meters[0] ("m") resolutions[0]: height is not allowed on linear meters']);
+  });
+});
+
 describe('assertValidManifest', () => {
   it('throws a ManifestError listing every issue', () => {
     try {

@@ -17,6 +17,12 @@ describe('srgbEffect core', () => {
     expect(() => srgbEffect({ title: '' })).toThrow(/\[srgb-effect\] Invalid effect manifest/);
   });
 
+  it('reports an untyped config without a title as a manifest issue, not a TypeError', () => {
+    expect(() => srgbEffect({} as never)).toThrow(
+      /Invalid effect manifest:\n {2}- title: must be a string/,
+    );
+  });
+
   it('writes the generated types file on config resolution', async () => {
     const root = createFixture({ 'index.html': '<body></body>' });
     const server = await createServer({
