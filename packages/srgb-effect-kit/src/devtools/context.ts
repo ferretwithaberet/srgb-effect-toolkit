@@ -1,7 +1,9 @@
 import type { DevtoolsConfig } from '../shared';
 import type { CanvasApiController } from './canvasApi';
+import type { ConsoleCounter } from './consoleCounter';
 import type { MockEngine } from './engine';
 import type { PropertyController } from './properties';
+import type { RendererController } from './renderer';
 import type { DevtoolsStorage } from './storage';
 
 /** The effect page's window. */
@@ -40,6 +42,8 @@ export interface DevtoolsContext extends SimulationContext {
   readonly storage: DevtoolsStorage;
   /** The page's native rAF, unaffected by the UltraLight simulation. */
   readonly raf: FrameScheduler;
+  readonly renderer: RendererController;
+  readonly consoleCounter: ConsoleCounter;
 }
 
 /** The window as a bag of globals, for names only known at runtime (property globals, handlers). */

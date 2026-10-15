@@ -1,5 +1,7 @@
 import type { DevtoolsConfig } from '../shared';
 import type { DevtoolsContext, FrameScheduler, StartOptions } from './context';
+import { installConsoleCounter } from './consoleCounter';
+import { installRendererSimulation } from './renderer';
 import { findInstance, rememberInstance, startSimulation } from './simulation';
 import { createStorage } from './storage';
 
@@ -20,9 +22,18 @@ export function startDevtools(config: DevtoolsConfig, options: StartOptions = {}
     request: win.requestAnimationFrame.bind(win),
     cancel: win.cancelAnimationFrame.bind(win),
   };
+  // Before effect code runs: it may read the user agent or start its loop at the top level.
+  const renderer = installRendererSimulation(win, storage, raf);
+  const consoleCounter = installConsoleCounter(win);
   const simulation = startSimulation(config, win, storage, hot);
 
-  const context: DevtoolsContext = { ...simulation, storage, raf };
+  const context: DevtoolsContext = {
+    ...simulation,
+    storage,
+    raf,
+    renderer,
+    consoleCounter,
+  };
   rememberInstance(win, context);
   return context;
 }

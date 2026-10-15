@@ -9,8 +9,10 @@ import {
 } from '../../test/helpers/devtools';
 import type { DevtoolsConfig } from '../shared';
 import { startDevtools, type DevtoolsContext, type StartOptions } from './index';
+import { overrideUserAgent } from './renderer';
 
 const globals = window as unknown as Record<string, unknown>;
+const userAgent = navigator.userAgent;
 const started: DevtoolsContext[] = [];
 const start = (config: DevtoolsConfig = CONFIG, options?: StartOptions) => {
   const context = startDevtools(config, options);
@@ -24,7 +26,10 @@ beforeEach(() => {
   vi.stubGlobal('reportError', vi.fn());
 });
 afterEach(() => {
-  started.length = 0;
+  // Unwrap the console before restoring spies, so the spies' originals come back last.
+  for (const context of started.splice(0)) context.consoleCounter.restore();
+  vi.restoreAllMocks();
+  overrideUserAgent(navigator, userAgent);
   restoreReadyState();
   vi.unstubAllGlobals();
   vi.clearAllTimers();
@@ -94,6 +99,23 @@ describe('startDevtools', () => {
     relay({ nonsense: true });
     expect(handler).toHaveBeenCalledOnce();
     expect(handler).toHaveBeenCalledWith({ sender: 'game', event: 'hit' });
+  });
+
+  it('applies the persisted renderer before effect code runs', () => {
+    localStorage.setItem(
+      'srgb-effect-kit:Devtools Test:renderer',
+      JSON.stringify({ renderer: 'qtwebengine', fps: 30 }),
+    );
+    const context = start();
+    expect(navigator.userAgent).toMatch(/QtWebEngine\//);
+    expect(context.renderer.settings).toEqual({ renderer: 'qtwebengine', fps: 30 });
+  });
+
+  it('counts console output from the start', () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const context = start();
+    console.log('effect output');
+    expect(context.consoleCounter.counts.log).toBe(1);
   });
 
   it('returns the existing context when started twice', () => {
