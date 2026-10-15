@@ -215,7 +215,8 @@ export function mountDrawer(
   const update = (patch: Partial<DrawerState>, persist = true) => {
     if (patch.size !== undefined) preferredSize = patch.size;
     const next = { ...state, ...patch };
-    if (patch.size !== undefined || patch.dock !== undefined) {
+    // A dock switch only changes the rendered size; the preferred one survives it.
+    if (patch.size !== undefined) {
       preferredSize = clampDrawerSize(preferredSize, next.dock, viewport());
     }
     state = { ...next, size: clampDrawerSize(preferredSize, next.dock, viewport()) };
@@ -253,7 +254,7 @@ export function mountDrawer(
       pending = undefined;
       update({ size }, false);
     };
-    const schedule = rafBatch(win.requestAnimationFrame.bind(win), apply);
+    const schedule = rafBatch(context.raf.request, apply);
     const onMove = (move: PointerEvent) => {
       pending =
         state.dock === 'bottom' ? win.innerHeight - move.clientY : win.innerWidth - move.clientX;

@@ -14,10 +14,14 @@ import {
 
 const STORAGE_KEY = 'srgb-effect-kit:Devtools Test:drawer';
 
+const nativeFrames: FrameRequestCallback[] = [];
+const nativeRaf = vi.fn((callback: FrameRequestCallback) => nativeFrames.push(callback));
+
 const context = () =>
   ({
     win: window,
     storage: createStorage(MANIFEST.title, () => localStorage),
+    raf: { request: nativeRaf, cancel: () => {} },
   }) as unknown as DevtoolsContext;
 
 const tab = (id: string, hooks: Partial<Record<'show' | 'hide', () => void>> = {}) => {
@@ -136,13 +140,9 @@ describe('drawer hardening', () => {
       clientY: 0,
       ...init,
     });
-  const frames: FrameRequestCallback[] = [];
+  const frames = nativeFrames;
   const runFrames = () => frames.splice(0).forEach((callback) => callback(0));
   const open = () => {
-    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
-      frames.push(callback);
-      return frames.length;
-    });
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...DEFAULT_DRAWER_STATE, open: true }));
     const drawer = mountDrawer(context(), []);
     const resize = find(drawer.root, 'resize');
@@ -203,6 +203,38 @@ describe('drawer hardening', () => {
       expect(drawer.state.size).toBe(600);
     } finally {
       Object.defineProperty(window, 'innerHeight', { value: original, configurable: true });
+    }
+  });
+
+  it('drives drags from the native scheduler even when window rAF is throttled', () => {
+    const { drawer, resize } = open();
+    const throttled = vi.fn(() => 0);
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(throttled);
+    resize.dispatchEvent(pointer('pointerdown'));
+    resize.dispatchEvent(pointer('pointermove', { clientY: window.innerHeight - 250 }));
+    expect(throttled).not.toHaveBeenCalled();
+    expect(frames).toHaveLength(1);
+    runFrames();
+    expect(drawer.state.size).toBe(250);
+  });
+
+  it('keeps the preferred size across dock switches in a narrow window', () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ ...DEFAULT_DRAWER_STATE, size: 600, open: true }),
+    );
+    const width = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { value: 400, configurable: true });
+    try {
+      const drawer = mountDrawer(context(), []);
+      drawer.setDock('right');
+      expect(drawer.state.size).toBe(360);
+      expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!)).toMatchObject({ size: 600 });
+      drawer.setDock('bottom');
+      expect(drawer.state.size).toBe(600);
+      expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!)).toMatchObject({ size: 600 });
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { value: width, configurable: true });
     }
   });
 
