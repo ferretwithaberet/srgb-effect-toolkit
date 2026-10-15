@@ -17,6 +17,16 @@ describe('kebabCase', () => {
     expect(kebabCase('  Café  Lights ')).toBe('cafe-lights');
   });
 
+  it('keeps digits attached to their letters and splits acronyms', () => {
+    expect(kebabCase('Basic 2D')).toBe('basic-2d');
+    expect(kebabCase('3D Cube')).toBe('3d-cube');
+    expect(kebabCase('XMLParser')).toBe('xml-parser');
+  });
+
+  it('strips combining marks from decomposed input', () => {
+    expect(kebabCase('Cafe\u0301 Nin\u0303o')).toBe('cafe-nino');
+  });
+
   it('falls back to "effect" when nothing usable remains', () => {
     expect(kebabCase('!!!')).toBe('effect');
   });

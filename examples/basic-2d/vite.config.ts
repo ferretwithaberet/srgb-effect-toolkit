@@ -5,7 +5,6 @@ export default defineConfig({
   plugins: [
     srgbEffect({
       title: 'Basic 2D',
-      fileName: 'basic-2d.html',
       description: 'Rainbow wave rendered on a 2D canvas',
       publisher: 'srgb-effect-kit',
       properties: [
