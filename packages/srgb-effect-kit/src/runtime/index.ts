@@ -17,3 +17,5 @@ export {
   rgbToHsl,
 } from './color';
 export type { Hsl, Rgb } from './color';
+export { createLoop } from './loop';
+export type { Loop, LoopInfo, LoopOptions } from './loop';
