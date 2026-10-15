@@ -118,6 +118,14 @@ describe('startDevtools', () => {
     expect(context.consoleCounter.counts.log).toBe(1);
   });
 
+  it('mounts the drawer once the DOM is ready', () => {
+    setReadyState('interactive');
+    start();
+    expect(document.querySelector('srgb-effect-devtools')).toBeNull();
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+    expect(document.querySelector('srgb-effect-devtools')?.shadowRoot).not.toBeNull();
+  });
+
   it('returns the existing context when started twice', () => {
     const first = start();
     const second = start({ ...CONFIG, manifest: { title: 'Other' } });

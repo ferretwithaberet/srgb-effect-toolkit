@@ -119,3 +119,13 @@ test("devtools 'none' injects nothing", async ({ page }) => {
   const response = await page.request.post(`${origin}/canvas/event?sender=e2e&event=ping`);
   expect(response.status()).toBe(404);
 });
+
+test('opens and closes the drawer', async ({ page }) => {
+  await openEffect(page);
+  const panel = page.locator('[data-srgb-devtools="panel"]');
+  await expect(panel).toBeHidden();
+  await page.locator('[data-srgb-devtools="toggle"]').click();
+  await expect(panel).toBeVisible();
+  await page.locator('[data-srgb-devtools="close"]').click();
+  await expect(panel).toBeHidden();
+});

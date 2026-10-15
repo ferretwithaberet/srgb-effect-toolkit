@@ -1,9 +1,11 @@
 import type { DevtoolsConfig } from '../shared';
 import type { DevtoolsContext, FrameScheduler, StartOptions } from './context';
 import { installConsoleCounter } from './consoleCounter';
+import { onDomReady } from './lifecycle';
 import { installRendererSimulation } from './renderer';
 import { findInstance, rememberInstance, startSimulation } from './simulation';
 import { createStorage } from './storage';
+import { mountUi } from './ui';
 
 export type { DevtoolsContext, StartOptions } from './context';
 
@@ -35,5 +37,7 @@ export function startDevtools(config: DevtoolsConfig, options: StartOptions = {}
     consoleCounter,
   };
   rememberInstance(win, context);
+  // Registered after the simulation's, so the drawer mounts after the load-time handler calls.
+  onDomReady(win, () => mountUi(context));
   return context;
 }
