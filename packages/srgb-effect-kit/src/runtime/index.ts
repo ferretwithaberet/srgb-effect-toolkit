@@ -5,3 +5,15 @@ export { getEngine } from './engine';
 export { RENDERER_SIGNATURES, detectRenderer, isSignalRGB } from './renderer';
 export type { Renderer } from './renderer';
 export type { CanvasApiEvent, Engine, EngineAudio, EngineZone, SRGBBoolean } from './types';
+export {
+  hexToHsl,
+  hexToRgb,
+  hsl,
+  hslToHex,
+  hslToRgb,
+  lerpColor,
+  rgb,
+  rgbToHex,
+  rgbToHsl,
+} from './color';
+export type { Hsl, Rgb } from './color';
