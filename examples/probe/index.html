@@ -1,6 +1,85 @@
 <!doctype html>
 <html>
   <head>
+    <!-- prettier-ignore -->
+    <script>
+      // Plain ES5 inline script, kept as is by the build. It runs while the page parses, before the
+      // bundle, so an `alive` line without a `start` line means the bundle failed to parse or run.
+      // Prettier ignores it: its trailingComma setting would add ES2017 commas to calls.
+      (function () {
+        function now() {
+          try {
+            return window.performance && performance.now ? performance.now() : null;
+          } catch (e) {
+            return null;
+          }
+        }
+        function encode(value) {
+          if (value === null || value === undefined) return 'null';
+          if (typeof value === 'number') return isFinite(value) ? String(value) : '"' + value + '"';
+          if (typeof value === 'boolean') return String(value);
+          return '"' + String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+        }
+        function log(section, data) {
+          var text;
+          try {
+            if (typeof JSON === 'undefined') throw new Error('no JSON');
+            text = '[probe] ' + section + ' ' + JSON.stringify(data);
+          } catch (e) {
+            var parts = [];
+            for (var key in data) {
+              if (Object.prototype.hasOwnProperty.call(data, key)) {
+                parts.push('"' + key + '":' + encode(data[key]));
+              }
+            }
+            text = '[probe] ' + section + ' {' + parts.join(',') + '}';
+          }
+          try {
+            console.log(text);
+          } catch (e) {}
+        }
+        try {
+          log('alive', {
+            ua: navigator.userAgent,
+            readyState: document.readyState,
+            t: now(),
+            href: location.href,
+            build: 'html',
+          });
+        } catch (e) {}
+        try {
+          window.onerror = function (message, source, line, col) {
+            log('window-error', {
+              message: String(message),
+              source: source,
+              line: line,
+              col: col,
+              tag: 'onerror',
+            });
+            return false;
+          };
+        } catch (e) {}
+        try {
+          window.addEventListener(
+            'error',
+            function (event) {
+              var target = event && event.target;
+              var tag = target && target !== window && target.tagName ? target.tagName : 'window';
+              log('window-error', {
+                message: event && event.message ? String(event.message) : null,
+                source: event && event.filename
+                  ? event.filename
+                  : (target && (target.src || target.href)) || null,
+                line: event ? event.lineno : null,
+                col: event ? event.colno : null,
+                tag: 'capture:' + tag,
+              });
+            },
+            true
+          );
+        } catch (e) {}
+      })();
+    </script>
     <style>
       body {
         margin: 0;

@@ -37,19 +37,21 @@ The canvas also shows a small status panel (white text on black): the build (`mo
 
 What to expect in the console, in order:
 
-| Line                      | When                                                       |
-| ------------------------- | ---------------------------------------------------------- |
-| `start`                   | Immediately.                                               |
-| `env`                     | Immediately: user agent, viewport, DPR, renderer.          |
-| `globals`                 | Immediately: globals a clean window doesn't have.          |
-| `properties`              | Immediately: raw property values, handlers before assign.  |
-| `engine`, `meters`        | Immediately: `engine`'s shape and the meter values.        |
-| `changed`                 | On every `on<Prop>Changed` call, including load-time ones. |
-| `lifecycle`               | On `DOMContentLoaded` and `load`.                          |
-| `canvas-event`            | On every `onCanvasApiEvent` call.                          |
-| `features`                | Within about 3 s, when the Worker and fetch checks end.    |
-| `timing`, `audio`, `zone` | At 5 s.                                                    |
-| `REPORT`                  | At 6 s, then every 30 s. Everything above in one line.     |
+| Line                      | When                                                        |
+| ------------------------- | ----------------------------------------------------------- |
+| `alive`                   | First, from a small inline script, before the probe's code. |
+| `window-error`            | On any uncaught error or failed resource load.              |
+| `start`                   | Immediately.                                                |
+| `env`                     | Immediately: user agent, viewport, DPR, renderer.           |
+| `globals`                 | Immediately: globals a clean window doesn't have.           |
+| `properties`              | Immediately: raw property values, handlers before assign.   |
+| `engine`, `meters`        | Immediately: `engine`'s shape and the meter values.         |
+| `changed`                 | On every `on<Prop>Changed` call, including load-time ones.  |
+| `lifecycle`               | On `DOMContentLoaded` and `load`.                           |
+| `canvas-event`            | On every `onCanvasApiEvent` call.                           |
+| `features`                | Within about 3 s, when the Worker and fetch checks end.     |
+| `timing`, `audio`, `zone` | At 5 s.                                                     |
+| `REPORT`                  | At 6 s, then every 30 s. Everything above in one line.      |
 
 A section that fails logs `[probe] <section>-error {"message":…,"stack":…}` instead; send those too.
 
@@ -102,6 +104,7 @@ Include every console error or warning that is not a `[probe]` line too, such as
 ## Troubleshooting
 
 - **No `[probe]` lines at all.** Check that the file you selected is the one you copied (the effect name is **SRGB Probe** or **SRGB Probe Classic**), and that SignalRGB was restarted after copying it.
+- **`alive` but no `start`.** The probe's main script failed to parse or run. Send the `alive` line, any `window-error` lines and every other console error.
 - **`probe.html` shows nothing, but `probe-classic.html` works.** That is an important result: it means the renderer can't run module scripts. Report it, with both runs' console output.
 - **The canvas text appears, but no lines show in the console.** The console may be filtering messages. Look for a level or text filter, and describe what you see in the console.
 - **Lines look cut off.** The `REPORT` line is long (several kB). If the console truncates it, the individual section lines above it hold the same data; send those.
