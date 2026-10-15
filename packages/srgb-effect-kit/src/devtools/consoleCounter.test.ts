@@ -13,6 +13,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   counter.restore();
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
@@ -50,7 +51,21 @@ describe('installConsoleCounter', () => {
     expect(() => console.warn('still forwarded')).not.toThrow();
     expect(warn).toHaveBeenCalledWith('still forwarded');
     expect(window.reportError).toHaveBeenCalledWith(error);
-    vi.unstubAllGlobals();
+  });
+
+  it('does not re-enter when reporting a listener error dispatches an error event', () => {
+    // Like browsers, reportError synchronously fires `error` on the window.
+    vi.stubGlobal('reportError', (error: unknown) => {
+      window.dispatchEvent(new ErrorEvent('error', { error }));
+    });
+    const listener = vi.fn(() => {
+      throw new Error('listener');
+    });
+    counter.subscribe(listener);
+    expect(() => console.log('forwarded')).not.toThrow();
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(counter.counts.log).toBe(1);
+    expect(counter.counts.uncaught).toBe(0);
   });
 
   it('forwards but does not count logging from inside a listener', () => {

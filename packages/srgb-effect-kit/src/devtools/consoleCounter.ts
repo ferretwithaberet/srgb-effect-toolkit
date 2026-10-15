@@ -33,6 +33,7 @@ export function installConsoleCounter(win: DevtoolsWindow): ConsoleCounter {
   const listeners = new Set<(counts: Readonly<ConsoleCounts>) => void>();
   let notifying = false;
   const notify = () => {
+    const previous = notifying;
     notifying = true;
     try {
       for (const listener of listeners) {
@@ -43,7 +44,7 @@ export function installConsoleCounter(win: DevtoolsWindow): ConsoleCounter {
         }
       }
     } finally {
-      notifying = false;
+      notifying = previous;
     }
   };
   const count = (key: keyof ConsoleCounts) => {
@@ -62,7 +63,10 @@ export function installConsoleCounter(win: DevtoolsWindow): ConsoleCounter {
       if (!notifying && !isViteMessage(args)) count(method);
     };
   }
-  const onError = () => count('uncaught');
+  // Errors reported while notifying (a listener's own failure) stay visible but are not counted.
+  const onError = () => {
+    if (!notifying) count('uncaught');
+  };
   win.addEventListener('error', onError);
   win.addEventListener('unhandledrejection', onError);
 
