@@ -4,6 +4,7 @@ import type { DevtoolsContext, FrameScheduler, StartOptions } from './context';
 import { installConsoleCounter } from './consoleCounter';
 import { onDomReady } from './lifecycle';
 import { installRendererSimulation } from './renderer';
+import { createScreenController, openScreenCapture } from './screenController';
 import { findInstance, rememberInstance, startSimulation } from './simulation';
 import { createStorage } from './storage';
 import { mountUi } from './ui';
@@ -31,6 +32,13 @@ export function startDevtools(config: DevtoolsConfig, options: StartOptions = {}
   const simulation = startSimulation(config, win, storage, hot);
   const { engine } = simulation;
   const audio = createAudioController(engine.audio, storage, raf, openAudioCapture);
+  const screen = createScreenController(
+    engine,
+    config.manifest.meters ?? [],
+    storage,
+    raf,
+    openScreenCapture,
+  );
 
   const context: DevtoolsContext = {
     ...simulation,
@@ -39,6 +47,7 @@ export function startDevtools(config: DevtoolsConfig, options: StartOptions = {}
     renderer,
     consoleCounter,
     audio,
+    screen,
   };
   rememberInstance(win, context);
   // Registered after the simulation's, so the drawer mounts after the load-time handler calls.

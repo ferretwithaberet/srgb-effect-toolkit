@@ -5,6 +5,7 @@ import type { ConsoleCounter } from './consoleCounter';
 import type { MockEngine } from './engine';
 import type { PropertyController } from './properties';
 import type { RendererController } from './renderer';
+import type { ScreenController } from './screenController';
 import type { DevtoolsStorage } from './storage';
 
 /** The effect page's window. */
@@ -46,6 +47,7 @@ export interface DevtoolsContext extends SimulationContext {
   readonly renderer: RendererController;
   readonly consoleCounter: ConsoleCounter;
   readonly audio: AudioController;
+  readonly screen: ScreenController;
 }
 
 /** The window as a bag of globals, for names only known at runtime (property globals, handlers). */
