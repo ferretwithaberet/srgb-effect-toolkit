@@ -86,6 +86,7 @@ Copy `dist/my-effect.html` into `C:\Users\<username>\AppData\Local\VortxEngine\a
 
 - [basic-2d](examples/basic-2d): a rainbow wave on a 2D canvas with number, hue, boolean and list controls.
 - [audio-visualizer](examples/audio-visualizer): frequency bars driven by `engine.audio`.
+- [probe](examples/probe): a diagnostic effect that logs SignalRGB's environment to the console, to verify the toolkit's provisional defaults. See its [test plan](examples/probe/TEST-PLAN.md).
 
 ## Contributing
 
@@ -123,7 +124,7 @@ Layout:
 - `examples/`: example effects, built against the workspace package.
 - `docs/`: user documentation.
 
-Status: the plugin, the runtime and the devtools are built. The probe effect that verifies behaviour on real SignalRGB (the upcoming SignalRGB probe) is not built yet, so the simulated user agents, raw formats and load-time call order are provisional.
+Status: the plugin, the runtime and the devtools are built. The [probe effect](examples/probe) that verifies behaviour on real SignalRGB is built but has not been run on SignalRGB yet, so the simulated user agents, raw formats and load-time call order are provisional.
 
 ## License
 

@@ -36,7 +36,7 @@ SignalRGB's testing requirements ask for a clean console: an effect should log n
 
 ## Pending verification on real SignalRGB
 
-A probe effect will run inside SignalRGB with both renderers and record how it really behaves. It is not built yet, so these points are provisional. Where the toolkit depends on one of them, it keeps it behind a single option, helper or type, so it can change in one place once verified:
+A probe effect runs inside SignalRGB with both renderers and records how it really behaves. Until its results are in, these points are provisional. Where the toolkit depends on one of them, it keeps it behind a single option, helper or type, so it can change in one place once verified:
 
 | Topic                         | Current assumption                                                                         | Where it matters                                                                                                                                          |
 | ----------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -48,5 +48,7 @@ A probe effect will run inside SignalRGB with both renderers and record how it r
 | Raw `color` and `list` values | `color` globals are `#rrggbb` strings, and `list` globals are one of the `values` strings. | The generated types (`string` and the union of `values`).                                                                                                 |
 | Handler arguments             | `on<Prop>Changed` handlers receive no arguments.                                           | Read the property global inside the handler instead of relying on an argument.                                                                            |
 | `onCanvasApiEvent` argument   | An object with `sender` and `event` strings, possibly with more fields.                    | The [`CanvasApiEvent`](runtime-api.md#canvasapievent) type declares only `sender` and `event`.                                                            |
+
+The probe is [`examples/probe`](../examples/probe); [its test plan](../examples/probe/TEST-PLAN.md) describes how to run it in SignalRGB and send back the results.
 
 Until then, test your effect in SignalRGB with both renderers before you share it.
