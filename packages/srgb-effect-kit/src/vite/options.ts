@@ -9,7 +9,7 @@ export interface DevtoolsOptions {
 /** Options for `srgbEffect()`: the effect manifest plus build settings. */
 export interface SrgbEffectOptions extends EffectManifest {
   /**
-   * Generated globals typings, relative to the Vite root. Commit this file.
+   * Generated globals typings, relative to the Vite root. Generated on every `vite` and `vite build`; add it to `.gitignore`.
    * @default 'src/srgb-effect.d.ts'
    */
   typesFile?: string;

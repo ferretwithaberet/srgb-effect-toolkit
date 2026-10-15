@@ -126,9 +126,21 @@ Your editor shows errors for `speed`, `mode` and `onModeChanged` until the next 
 pnpm dev
 ```
 
-When Vite loads your config, the plugin writes `src/srgb-effect.d.ts`. This file declares a global for each property and its change handler, and pulls in the types of SignalRGB's own globals such as `engine`. Commit it. The plugin rewrites it whenever you change the properties in `vite.config.ts`.
+When Vite loads your config, the plugin writes `src/srgb-effect.d.ts`. This file declares a global for each property and its change handler, and pulls in the types of SignalRGB's own globals such as `engine`. Do not commit it: it is generated, and Vite regenerates it on every `vite` and `vite build`. Add it to `.gitignore`:
 
-Run `pnpm dev` once before your first build. The template's build script is `tsc && vite build`: `tsc` type-checks your code before Vite runs, and without `src/srgb-effect.d.ts` it fails with `Cannot find name 'speed'`.
+```text
+src/srgb-effect.d.ts
+```
+
+Prettier respects `.gitignore` by default, so it needs no separate ignore entry.
+
+Then reorder the build script in `package.json`. The template's `"build": "tsc && vite build"` type-checks before Vite has generated `src/srgb-effect.d.ts`, so on a fresh clone it fails with `Cannot find name 'speed'`. Use:
+
+```json
+"build": "vite build && tsc"
+```
+
+Running `pnpm dev` once also generates the file, so your editor knows the globals before the first build.
 
 Open the URL Vite prints and view the page source. The `<head>` contains the generated `<title>` and `<meta>` tags:
 

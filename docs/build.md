@@ -124,13 +124,7 @@ srgbEffect({ title: 'My Effect', fileName: 'my-effect-dev.html' });
 
 ## The generated types file
 
-The plugin also writes `src/srgb-effect.d.ts` (the `typesFile` option) whenever Vite loads the config, during builds as well as `pnpm dev`. Commit it, and keep it out of your formatter, because the plugin rewrites it whenever your options change. With Prettier, add it to `.prettierignore`:
-
-```text
-src/srgb-effect.d.ts
-```
-
-In CI, you can run the build and then `git diff --exit-code` to catch a types file that is out of date with `vite.config.ts`. [Globals](globals.md#how-the-typing-works) explains what the file contains.
+The plugin also writes `src/srgb-effect.d.ts` (the `typesFile` option) whenever Vite loads the config, during builds as well as `pnpm dev`. It is generated, so do not commit it: add it to `.gitignore`. Vite regenerates it on every `vite` and `vite build`. Prettier respects `.gitignore` by default, so no `.prettierignore` entry is needed. Because the file does not exist on a fresh clone, the template's `"build": "tsc && vite build"` fails until Vite has run once; use `"build": "vite build && tsc"` instead, or run `pnpm dev` once. [Globals](globals.md#how-the-typing-works) explains what the file contains.
 
 ## Errors and warnings
 

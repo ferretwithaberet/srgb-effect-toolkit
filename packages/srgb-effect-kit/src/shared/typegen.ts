@@ -16,7 +16,7 @@ const globalType = (p: PropertyDef): string => {
   }
 };
 
-/** Contents of the committed `.d.ts` that types SignalRGB's injected globals. */
+/** Contents of the generated `.d.ts` that types SignalRGB's injected globals. */
 export function generateTypes(manifest: EffectManifest): string {
   const properties = manifest.properties ?? [];
   const meters = manifest.meters ?? [];

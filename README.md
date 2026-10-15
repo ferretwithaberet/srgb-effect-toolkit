@@ -59,7 +59,7 @@ createLoop(({ dt }) => {
 }).start();
 ```
 
-Run `pnpm dev` once: it generates `src/srgb-effect.d.ts`, which types `speed` and which the template's `tsc` step needs. The effect itself only runs inside SignalRGB for now, because the dev server does not define the property globals yet ([why](docs/globals.md#globals-in-vite-dev)). Then build:
+Add `src/srgb-effect.d.ts` to `.gitignore`: it is generated on every `vite` and `vite build`, so do not commit it. Because the template's `"build": "tsc && vite build"` would run `tsc` before the file exists on a fresh clone, change the script to `"build": "vite build && tsc"`. Run `pnpm dev` once so your editor has the types too. The effect itself only runs inside SignalRGB for now, because the dev server does not define the property globals yet ([why](docs/globals.md#globals-in-vite-dev)). Then build:
 
 ```sh
 pnpm dev
@@ -104,7 +104,7 @@ pnpm typecheck
 pnpm test
 ```
 
-CI also fails when `pnpm build` changes committed files, such as an example's generated `src/srgb-effect.d.ts`. `pnpm format:fix` applies Prettier.
+CI runs the build before the typecheck, so the examples generate their git-ignored `src/srgb-effect.d.ts` before it is checked. `pnpm format:fix` applies Prettier.
 
 Layout:
 

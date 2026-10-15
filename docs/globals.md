@@ -29,12 +29,8 @@ export {};
 For the generated file to work:
 
 - **Keep the file inside your tsconfig `include`.** The Vite template's `"include": ["src"]` already covers it. If you change `typesFile`, which is relative to the Vite root, make sure the new path is included too.
-- **Commit it.** Without it, `tsc` and your editor do not know the globals until Vite runs once. The plugin writes it only when its content changes.
-- **Exclude it from your formatter.** The plugin rewrites it whenever the options change, so a formatter would keep fighting it. For Prettier, add this line to `.prettierignore`:
-
-  ```text
-  src/srgb-effect.d.ts
-  ```
+- **Do not commit it.** It is generated, so add `src/srgb-effect.d.ts` to your `.gitignore`. Vite regenerates it on every `vite` and `vite build`, writing only when the content changes. Prettier respects `.gitignore` by default, so it needs no separate ignore entry.
+- **Generate it before `tsc` runs.** On a fresh clone the file does not exist yet, so `tsc` fails with `Cannot find name 'speed'` until Vite has run once. Run `vite build && tsc` in that order, or run `pnpm dev` once so your editor has the types.
 
 ### `srgb-effect-kit/client`
 

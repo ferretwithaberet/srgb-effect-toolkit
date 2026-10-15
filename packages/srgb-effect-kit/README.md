@@ -59,7 +59,7 @@ createLoop(({ dt }) => {
 
 Good to know:
 
-- The plugin writes `src/srgb-effect.d.ts`, which types your globals, whenever Vite loads the config. Commit it, and add it to your formatter's ignore list (for example `.prettierignore`), because the plugin rewrites it when the options change.
+- The plugin writes `src/srgb-effect.d.ts`, which types your globals, on every `vite` and `vite build`. Do not commit it: add it to `.gitignore` (Prettier respects `.gitignore`). Because the file does not exist on a fresh clone, change the template's `"build": "tsc && vite build"` to `"build": "vite build && tsc"`; running `pnpm dev` once also generates it for your editor.
 - The dev server does not define SignalRGB's globals yet; a dev-only devtools drawer that simulates them is planned. Until then, reading a property global or making a bare `onSpeedChanged = …` assignment throws a `ReferenceError` in the browser. Both work inside SignalRGB.
 - Assign change handlers to `window` (`window.onSpeedChanged = () => {}`). A top-level `function onSpeedChanged() {}` is module-scoped and never called; the plugin warns about it.
 - `dropConsole` (default `true`) strips `console.*` for SignalRGB's clean-console requirement, and minifies the script even when `build.minify` is `false`.

@@ -17,7 +17,6 @@ jobs:
       - run: pnpm lint
       - run: pnpm format
       - run: pnpm build
-      # Fails when the committed generated types are stale.
-      - run: git diff --exit-code
+      # Build runs before typecheck: it generates each example's srgb-effect.d.ts.
       - run: pnpm typecheck
       - run: pnpm test
