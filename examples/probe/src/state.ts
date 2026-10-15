@@ -10,6 +10,11 @@ export const state = {
   changed: [] as Json[],
   /** Every `onCanvasApiEvent` call, as logged. */
   canvasEvents: [] as Json[],
+  /** Property names whose `on<Prop>Changed` ran since the property watcher's last frame. */
+  handlerCalled: {} as Record<string, boolean>,
+  /** `prop-change` records, as logged (capped; `propChangeCount` keeps counting). */
+  propChanges: [] as Json[],
+  propChangeCount: 0,
   /** rAF rate measured by the timing collector, once known. */
   hz: null as number | null,
   /** `performance.now()` of the last REPORT line. */

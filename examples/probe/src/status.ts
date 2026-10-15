@@ -19,6 +19,7 @@ export function startStatus(): void {
         `rAF: ${state.hz === null ? 'measuring…' : `${state.hz.toFixed(1)} Hz`}`,
         state.reportAt === null ? 'report: pending' : `report logged at ${seconds(state.reportAt)}`,
         `changed: ${state.changed.length}  canvas-event: ${state.canvasEvents.length}`,
+        `prop-change: ${state.propChangeCount}`,
         `t: ${seconds(now())}`,
       ];
       ctx.fillStyle = '#000';

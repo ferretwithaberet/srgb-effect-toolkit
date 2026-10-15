@@ -13,9 +13,10 @@ const FULL_REPORTS = 3;
 const MAX_RECORDS = 64;
 
 let fullReports = 0;
-/** How many changed / canvas-event records earlier REPORT lines covered. */
+/** How many changed / canvas-event / prop-change records earlier REPORT lines covered. */
 let changedSeen = 0;
 let eventsSeen = 0;
+let propChangesSeen = 0;
 /** The injected globals the last REPORT saw, for the late-globals diff. */
 let lastGlobals: Record<string, string> | null = null;
 
@@ -50,7 +51,7 @@ function snapshot(collect: () => unknown): Json {
   }
 }
 
-/** Logs `[probe] REPORT {...}`: every section so far plus the handler and event records. */
+/** Logs `[probe] REPORT {...}`: every section so far plus the handler, event and change records. */
 function logReport(): void {
   state.reportAt = now();
   fullReports++;
@@ -64,6 +65,7 @@ function logReport(): void {
   }
   changedSeen = state.changed.length;
   eventsSeen = state.canvasEvents.length;
+  propChangesSeen = state.propChanges.length;
   logJson('REPORT', {
     t: state.reportAt,
     n: fullReports,
@@ -78,6 +80,8 @@ function logReport(): void {
     changed: state.changed.slice(-MAX_RECORDS),
     canvasEventCount: state.canvasEvents.length,
     canvasEvents: state.canvasEvents.slice(-MAX_RECORDS),
+    propChangeCount: state.propChangeCount,
+    propChanges: state.propChanges.slice(-MAX_RECORDS),
   });
 }
 
@@ -88,11 +92,14 @@ function logDelta(): void {
   if (globals) lastGlobals = globals;
   const changed = state.changed.slice(changedSeen);
   const events = state.canvasEvents.slice(eventsSeen);
+  const propChanges = state.propChanges.slice(propChangesSeen);
   changedSeen = state.changed.length;
   eventsSeen = state.canvasEvents.length;
+  propChangesSeen = state.propChanges.length;
   const quiet =
     changed.length === 0 &&
     events.length === 0 &&
+    propChanges.length === 0 &&
     Object.keys(diff.added).length === 0 &&
     diff.removed.length === 0 &&
     Object.keys(diff.retyped).length === 0;
@@ -101,6 +108,8 @@ function logDelta(): void {
     t: now(),
     changed: changed.slice(-MAX_RECORDS),
     canvasEvents: events.slice(-MAX_RECORDS),
+    propChangeCount: state.propChangeCount,
+    propChanges: propChanges.slice(-MAX_RECORDS),
     globals: serialize(diff),
   });
 }

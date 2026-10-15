@@ -12,6 +12,7 @@ export function installHandlers(): void {
   let seq = 0;
   for (const name of propertyNames) {
     target[handlerName(name)] = function (this: unknown, ...args: unknown[]) {
+      state.handlerCalled[name] = true;
       guard('changed', () => {
         const value = readGlobal(name);
         const record = serialize({
