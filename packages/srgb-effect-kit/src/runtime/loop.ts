@@ -1,14 +1,15 @@
 export interface LoopInfo {
   /** Seconds since the previous rendered frame (0 on the first frame after start). */
   dt: number;
-  /** Seconds since the first rendered frame. */
+  /** Seconds of rendered time since the first frame (paused spans excluded). */
   time: number;
   /** 1-based count of rendered frames. */
   frameCount: number;
 }
 
 export interface LoopOptions {
-  /** Upper bound on rendered frames per second. Unset renders on every refresh. */
+  /** Upper bound on rendered frames per second. Unset renders on every refresh.
+   * Non-finite or non-positive values disable the cap. */
   maxFps?: number;
 }
 
@@ -25,12 +26,16 @@ const JITTER_TOLERANCE_MS = 1;
 /** Rounds to microseconds so float noise doesn't leak into dt/time. */
 const round = (seconds: number) => Math.round(seconds * 1e6) / 1e6;
 
+/** Non-finite or non-positive values disable the cap. */
+const normalizeFps = (fps?: number) =>
+  fps !== undefined && Number.isFinite(fps) && fps > 0 ? fps : undefined;
+
 export function createLoop(frame: (info: LoopInfo) => void, options: LoopOptions = {}): Loop {
-  let maxFps = options.maxFps;
+  let maxFps = normalizeFps(options.maxFps);
   let running = false;
   let rafId = 0;
   let frameCount = 0;
-  let firstTimestamp: number | undefined;
+  let elapsed = 0; // unrounded seconds of rendered time, excluding paused spans
   let previousFrame: number | undefined; // previous rendered frame, for dt
   let anchor: number | undefined; // cadence anchor for the fps cap
 
@@ -49,11 +54,11 @@ export function createLoop(frame: (info: LoopInfo) => void, options: LoopOptions
       anchor = timestamp;
     }
 
-    firstTimestamp ??= timestamp;
     const dt = previousFrame === undefined ? 0 : (timestamp - previousFrame) / 1000;
     previousFrame = timestamp;
+    elapsed += dt;
     frameCount += 1;
-    frame({ dt: round(dt), time: round((timestamp - firstTimestamp) / 1000), frameCount });
+    frame({ dt: round(dt), time: round(elapsed), frameCount });
   };
 
   return {
@@ -69,7 +74,7 @@ export function createLoop(frame: (info: LoopInfo) => void, options: LoopOptions
       cancelAnimationFrame(rafId);
     },
     setMaxFps(value) {
-      maxFps = value;
+      maxFps = normalizeFps(value);
     },
     get running() {
       return running;

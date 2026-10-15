@@ -74,7 +74,20 @@ describe('createLoop', () => {
     tick(32);
     tick(48);
     expect(frame).toHaveBeenCalledTimes(3);
-    expect(frame.mock.calls[1]![0]).toMatchObject({ dt: 0, frameCount: 2 });
+    expect(frame.mock.calls[1]![0]).toMatchObject({ dt: 0, time: 0, frameCount: 2 });
+    expect(frame.mock.calls[2]![0]).toMatchObject({ dt: 0.016, time: 0.016, frameCount: 3 });
+  });
+
+  it('treats invalid caps as uncapped', () => {
+    const frame = vi.fn();
+    const loop = createLoop(frame, { maxFps: 0 });
+    loop.start();
+    tick(0);
+    tick(16);
+    expect(frame).toHaveBeenCalledTimes(2);
+    loop.setMaxFps(Number.NaN);
+    tick(32);
+    expect(frame).toHaveBeenCalledTimes(3);
   });
 
   it('changes the cap while running', () => {
