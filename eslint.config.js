@@ -25,7 +25,16 @@ const DEVTOOLS_MESSAGE = 'devtools/ runs in the browser: no Node or Vite imports
 const VITE_MESSAGE = 'vite/ runs in Node: load devtools/ through the dev server, never import it.';
 
 export default defineConfig(
-  { ignores: ['**/dist/**', '**/node_modules/**', '**/*.d.ts', '**/*.generated.ts'] },
+  {
+    ignores: [
+      '**/dist/**',
+      '**/node_modules/**',
+      '**/*.d.ts',
+      '**/*.generated.ts',
+      'test-results/**',
+      'playwright-report/**',
+    ],
+  },
   js.configs.recommended,
   tseslint.configs.recommended,
   { languageOptions: { globals: { ...globals.browser, ...globals.node } } },
