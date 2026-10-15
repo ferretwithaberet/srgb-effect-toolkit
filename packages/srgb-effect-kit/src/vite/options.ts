@@ -1,18 +1,33 @@
 import { kebabCase, type EffectManifest } from '../shared';
 
+/** Options for the dev-only devtools drawer (not built yet; the option is already accepted). */
 export interface DevtoolsOptions {
   /** Call every on<Prop>Changed once at load, like SignalRGB does. @default true */
   fireChangedOnLoad?: boolean;
 }
 
+/** Options for `srgbEffect()`: the effect manifest plus build settings. */
 export interface SrgbEffectOptions extends EffectManifest {
-  /** Generated globals typings, relative to the Vite root. Commit this file. @default 'src/srgb-effect.d.ts' */
+  /**
+   * Generated globals typings, relative to the Vite root. Commit this file.
+   * @default 'src/srgb-effect.d.ts'
+   */
   typesFile?: string;
-  /** Output file name. @default kebab-cased title + '.html' */
+  /**
+   * Output file name: a plain name ending in `.html`, without directories.
+   * @default kebab-cased title + '.html'
+   */
   fileName?: string;
-  /** @default 'classic' (IIFE in a classic <script>) */
+  /**
+   * `'classic'` bundles the effect as a strict-mode IIFE in a classic `<script>`. `'module'` emits
+   * `<script type="module">`, which allows external imports, top-level await and `import.meta`.
+   * @default 'classic'
+   */
   script?: 'classic' | 'module';
-  /** Strip console.* and debugger from the build (SignalRGB requires a clean console). @default true */
+  /**
+   * Strip `console.*` and `debugger` from the build (SignalRGB requires a clean console). Also
+   * minifies the script, even with `build.minify: false`. @default true
+   */
   dropConsole?: boolean;
   /** Build target. Provisional until probed. @default 'es2020' */
   target?: string | string[];
@@ -20,6 +35,7 @@ export interface SrgbEffectOptions extends EffectManifest {
   devtools?: boolean | DevtoolsOptions;
 }
 
+/** `SrgbEffectOptions` with defaults applied, split into the manifest and plugin settings. */
 export interface ResolvedOptions {
   manifest: EffectManifest;
   typesFile: string;
@@ -30,6 +46,10 @@ export interface ResolvedOptions {
   devtools: false | Required<DevtoolsOptions>;
 }
 
+/**
+ * Applies defaults and splits plugin settings from the manifest.
+ * @throws Error when `fileName` does not end in `.html` or contains a path separator.
+ */
 export function resolveOptions(options: SrgbEffectOptions): ResolvedOptions {
   const {
     typesFile = 'src/srgb-effect.d.ts',

@@ -17,6 +17,27 @@ export type CheckedProperties<P extends readonly PropertyDef[]> = P & {
   readonly [K in keyof P]: CheckListDefault<P[K]>;
 };
 
+/**
+ * Vite plugin that turns a Vite project into a SignalRGB effect. It validates the options, writes
+ * the globals typings file (`typesFile`), injects the generated `<title>` and `<meta>` tags into
+ * `index.html`, warns about module-scoped change handlers, and makes `vite build` emit one
+ * self-contained HTML file.
+ *
+ * @throws Error `[srgb-effect] Invalid effect manifest:` followed by every issue found, or a
+ * `fileName` error.
+ * @returns The plugins to put in Vite's `plugins` array.
+ * @example
+ * export default defineConfig({
+ *   plugins: [
+ *     srgbEffect({
+ *       title: 'My Effect',
+ *       properties: [
+ *         { property: 'speed', type: 'number', label: 'Speed', min: 0, max: 100, default: 50 },
+ *       ],
+ *     }),
+ *   ],
+ * });
+ */
 export function srgbEffect<const P extends readonly PropertyDef[] = readonly []>(
   options: Omit<SrgbEffectOptions, 'properties'> & { properties?: CheckedProperties<P> },
 ): Plugin[] {

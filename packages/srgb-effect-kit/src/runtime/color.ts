@@ -1,9 +1,14 @@
+/** RGB color with channels from 0 to 255. */
 export interface Rgb {
+  /** 0–255 */
   r: number;
+  /** 0–255 */
   g: number;
+  /** 0–255 */
   b: number;
 }
 
+/** HSL color: hue in degrees, saturation and lightness in percent. */
 export interface Hsl {
   /** 0–360 */
   h: number;
@@ -17,6 +22,10 @@ const HEX = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i;
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const round1 = (value: number) => Math.round(value * 10) / 10;
 
+/**
+ * Parses `#rrggbb` or `#rgb` (the `#` is optional, any case).
+ * @throws Error `[srgb-effect] invalid hex color "<hex>"` for anything else.
+ */
 export function hexToRgb(hex: string): Rgb {
   const match = HEX.exec(hex);
   if (!match) throw new Error(`[srgb-effect] invalid hex color "${hex}"`);
@@ -26,6 +35,7 @@ export function hexToRgb(hex: string): Rgb {
   return { r: (value >> 16) & 255, g: (value >> 8) & 255, b: value & 255 };
 }
 
+/** Formats lowercase `#rrggbb`. Channels are clamped to 0–255 and rounded. */
 export const rgbToHex = ({ r, g, b }: Rgb): string =>
   `#${[r, g, b]
     .map((c) =>
@@ -35,6 +45,7 @@ export const rgbToHex = ({ r, g, b }: Rgb): string =>
     )
     .join('')}`;
 
+/** Converts RGB to HSL, rounding each component to one decimal. Greys get `h: 0, s: 0`. */
 export function rgbToHsl({ r, g, b }: Rgb): Hsl {
   const rn = r / 255;
   const gn = g / 255;
@@ -54,6 +65,7 @@ export function rgbToHsl({ r, g, b }: Rgb): Hsl {
   return { h: round1(h), s: round1(s * 100), l: round1(l * 100) };
 }
 
+/** Converts HSL to RGB with integer channels. Hue wraps around 360; `s` and `l` clamp to 0–100. */
 export function hslToRgb({ h, s, l }: Hsl): Rgb {
   const hue = ((h % 360) + 360) % 360;
   const sn = clamp(s, 0, 100) / 100;
@@ -80,15 +92,32 @@ export function hslToRgb({ h, s, l }: Hsl): Rgb {
   };
 }
 
+/** `rgbToHsl(hexToRgb(hex))`. Throws on invalid hex like `hexToRgb()`. */
 export const hexToHsl = (hex: string): Hsl => rgbToHsl(hexToRgb(hex));
+/** `rgbToHex(hslToRgb(value))`. */
 export const hslToHex = (value: Hsl): string => rgbToHex(hslToRgb(value));
 
+/**
+ * Builds a CSS `hsl()` string, or `hsla()` when `a` is given, using the comma syntax that older
+ * engines understand. Values are not clamped.
+ * @example hsl(200, 100, 50) // 'hsl(200, 100%, 50%)'
+ */
 export const hsl = (h: number, s: number, l: number, a?: number): string =>
   a === undefined ? `hsl(${h}, ${s}%, ${l}%)` : `hsla(${h}, ${s}%, ${l}%, ${a})`;
 
+/**
+ * Builds a CSS `rgb()` string, or `rgba()` when `a` is given, using the comma syntax. Values are
+ * not clamped.
+ * @example rgb(255, 0, 0, 0.5) // 'rgba(255, 0, 0, 0.5)'
+ */
 export const rgb = (r: number, g: number, b: number, a?: number): string =>
   a === undefined ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${a})`;
 
+/**
+ * Interpolates between two hex colors in RGB space and returns lowercase `#rrggbb`.
+ * `t` is clamped to 0–1. Throws on invalid hex like `hexToRgb()`.
+ * @example lerpColor('#000000', '#ffffff', 0.5) // '#808080'
+ */
 export function lerpColor(from: string, to: string, t: number): string {
   const amount = clamp(t, 0, 1);
   const a = hexToRgb(from);

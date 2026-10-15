@@ -1,3 +1,4 @@
+/** Timing passed to the `createLoop()` frame callback. */
 export interface LoopInfo {
   /** Seconds since the previous rendered frame (0 on the first frame after start). */
   dt: number;
@@ -7,16 +8,22 @@ export interface LoopInfo {
   frameCount: number;
 }
 
+/** Options for `createLoop()`. */
 export interface LoopOptions {
   /** Upper bound on rendered frames per second. Unset renders on every refresh.
    * Non-finite or non-positive values disable the cap. */
   maxFps?: number;
 }
 
+/** Handle returned by `createLoop()`. The loop is created stopped. */
 export interface Loop {
+  /** Starts requesting frames; does nothing if already running. The first `dt` after it is 0. */
   start(): void;
+  /** Stops requesting frames. `time` and `frameCount` resume from where they stopped. */
   stop(): void;
+  /** Changes the frame-rate cap, also while running. `undefined` or an invalid value removes it. */
   setMaxFps(maxFps: number | undefined): void;
+  /** Whether the loop is running. */
   readonly running: boolean;
 }
 
@@ -30,6 +37,18 @@ const round = (seconds: number) => Math.round(seconds * 1e6) / 1e6;
 const normalizeFps = (fps?: number) =>
   fps !== undefined && Number.isFinite(fps) && fps > 0 ? fps : undefined;
 
+/**
+ * Creates a `requestAnimationFrame` loop that calls `frame` once per rendered frame, with an
+ * optional frame-rate cap. Call `start()` to begin.
+ *
+ * @param frame - Called with `dt`, `time` (both in seconds) and `frameCount`.
+ * @param options - `maxFps` caps the rendered frame rate by skipping refreshes.
+ * @returns A stopped {@link Loop}.
+ * @example
+ * createLoop(({ dt }) => {
+ *   hue = (hue + speed * dt) % 360;
+ * }).start();
+ */
 export function createLoop(frame: (info: LoopInfo) => void, options: LoopOptions = {}): Loop {
   let maxFps = normalizeFps(options.maxFps);
   let running = false;
