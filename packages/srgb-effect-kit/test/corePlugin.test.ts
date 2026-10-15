@@ -85,7 +85,7 @@ describe('srgbEffect core', () => {
   });
 
   describe('custom HTML entry in dev', () => {
-    const start = async (input: string, logs: string[] = []) => {
+    const start = async (input: string, logs: string[] = [], base?: string) => {
       const root = createFixture({
         'index.html': '<body></body>',
         'effect.html': '<body></body>',
@@ -95,6 +95,7 @@ describe('srgbEffect core', () => {
       const server = await createServer({
         root,
         configFile: false,
+        base,
         customLogger: logger,
         server: { host: '127.0.0.1', port: 0, ws: false },
         build: { rolldownOptions: { input: path.join(root, input) } },
@@ -113,11 +114,51 @@ describe('srgbEffect core', () => {
       await server.close();
     });
 
+    it('keeps the query string when redirecting', async () => {
+      const server = await start('effect.html');
+      const response = await fetch(`${server.resolvedUrls?.local[0]}?x=1`, { redirect: 'manual' });
+      expect(response.headers.get('location')).toBe('/effect.html?x=1');
+      await server.close();
+    });
+
+    it('redirects the base to the entry under a custom base', async () => {
+      const logs: string[] = [];
+      const server = await start('effect.html', logs, '/app/');
+      const url = server.resolvedUrls?.local[0] ?? '';
+      expect(url.endsWith('/app/')).toBe(true);
+      const response = await fetch(url, { redirect: 'manual' });
+      expect(response.status).toBe(302);
+      expect(response.headers.get('location')).toBe('/app/effect.html');
+      const withQuery = await fetch(`${url}?x=1`, { redirect: 'manual' });
+      expect(withQuery.headers.get('location')).toBe('/app/effect.html?x=1');
+      server.printUrls();
+      expect(logs.join('\n')).toMatch(/\/app\/effect\.html/);
+      expect(logs.join('\n')).not.toMatch(/\/app\/\/effect|\/app\/app/);
+      await server.close();
+    });
+
     it('prints local URLs that include the entry path', async () => {
       const logs: string[] = [];
       const server = await start('effect.html', logs);
       server.printUrls();
       expect(logs.join('\n')).toMatch(/http:\/\/127\.0\.0\.1:\d+\/effect\.html/);
+      await server.close();
+    });
+
+    it('ignores an entry outside the root', async () => {
+      const outside = createFixture({ 'other.html': '<body></body>' });
+      const root = createFixture({ 'index.html': '<body></body>' });
+      const server = await createServer({
+        root,
+        configFile: false,
+        logLevel: 'silent',
+        server: { host: '127.0.0.1', port: 0, ws: false },
+        build: { rolldownOptions: { input: path.join(outside, 'other.html') } },
+        plugins: [srgbEffect(options)],
+      });
+      await server.listen();
+      const response = await fetch(server.resolvedUrls?.local[0] ?? '', { redirect: 'manual' });
+      expect(response.status).not.toBe(302);
       await server.close();
     });
 

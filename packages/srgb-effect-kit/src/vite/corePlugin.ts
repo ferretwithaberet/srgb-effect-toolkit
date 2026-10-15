@@ -23,6 +23,7 @@ function customEntryPath(config: ResolvedConfig): string | undefined {
   if (inputs.length !== 1 || typeof entry !== 'string' || !entry.endsWith('.html'))
     return undefined;
   const relative = path.relative(config.root, path.resolve(config.root, entry));
+  if (relative.startsWith('..') || path.isAbsolute(relative)) return undefined;
   const urlPath = `/${relative.split(path.sep).join('/')}`;
   return urlPath === '/index.html' ? undefined : urlPath;
 }
@@ -44,11 +45,16 @@ export function corePlugin(options: ResolvedOptions): Plugin {
     configureServer(server) {
       const entry = customEntryPath(server.config);
       if (!entry) return;
-      // Vite serves `/` from index.html, which does not exist here, so send visitors to the entry.
+      const base = `/${server.config.base.replace(/^\/+|\/+$/g, '')}/`.replace(/^\/\/$/, '/');
+      const target = base + entry.slice(1);
+      // Vite serves the base from index.html, which does not exist here, so send visitors to the
+      // entry. Only the base itself is redirected: with a non-root base, a request for `/` is left
+      // to Vite, which already points it at the base.
       server.middlewares.use((req, res, next) => {
-        if (req.url === '/' || req.url?.startsWith('/?')) {
+        const url = req.url ?? '';
+        if (url === base || url.startsWith(`${base}?`)) {
           res.statusCode = 302;
-          res.setHeader('Location', entry);
+          res.setHeader('Location', target + url.slice(base.length));
           res.end();
           return;
         }
@@ -58,8 +64,9 @@ export function corePlugin(options: ResolvedOptions): Plugin {
       server.printUrls = () => {
         const urls = server.resolvedUrls;
         if (urls) {
+          // Vite's printed URLs already end with the base, so only the entry name is appended.
           const withEntry = (url: string) =>
-            url.endsWith(entry) ? url : url.replace(/\/$/, '') + entry;
+            url.endsWith(entry) ? url : url.replace(/\/?$/, '/') + entry.slice(1);
           urls.local = urls.local.map(withEntry);
           urls.network = urls.network.map(withEntry);
         }
