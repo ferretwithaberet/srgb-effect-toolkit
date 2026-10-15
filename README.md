@@ -124,7 +124,7 @@ Layout:
 - `examples/`: example effects, built against the workspace package.
 - `docs/`: user documentation.
 
-Status: the plugin, the runtime and the devtools are built. The [probe effect](examples/probe) that verifies behaviour on real SignalRGB is built but has not been run on SignalRGB yet, so the simulated user agents, raw formats and load-time call order are provisional.
+Status: the plugin, the runtime and the devtools are built. The [probe effect](examples/probe) that verifies behaviour on real SignalRGB has had its first runs on SignalRGB; the simulated user agents, raw formats and load-time call order are being updated from those findings.
 
 ## License
 
