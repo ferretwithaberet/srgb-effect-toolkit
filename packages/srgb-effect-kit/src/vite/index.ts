@@ -1,5 +1,6 @@
 import type { Plugin } from 'vite';
 import { assertValidManifest, type PropertyDef } from '../shared';
+import { buildPlugin } from './buildPlugin';
 import { corePlugin } from './corePlugin';
 import { resolveOptions, type SrgbEffectOptions } from './options';
 
@@ -20,5 +21,5 @@ export function srgbEffect<const P extends readonly PropertyDef[] = readonly []>
 ): Plugin[] {
   const resolved = resolveOptions(options);
   assertValidManifest(resolved.manifest);
-  return [corePlugin(resolved)];
+  return [corePlugin(resolved), buildPlugin(resolved)];
 }
