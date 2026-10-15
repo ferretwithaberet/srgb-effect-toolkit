@@ -2,11 +2,11 @@
 // console messages. See TEST-PLAN.md for how to run it and what to send back.
 import { createAudioRecorder } from './collect/audio';
 import { collectEngine, collectMeters } from './collect/engine';
-import { collectEnv } from './collect/env';
+import { collectEnv, collectViewport } from './collect/env';
 import { collectFeatures } from './collect/features';
 import { collectGlobals } from './collect/globals';
 import { installHandlers, installLifecycle } from './collect/handlers';
-import { collectProperties } from './collect/properties';
+import { collectProperties, collectPropertyValues } from './collect/properties';
 import { collectStart } from './collect/start';
 import { createTimingRecorder } from './collect/timing';
 import { collectZone } from './collect/zone';
@@ -60,6 +60,11 @@ guard('timing', () => {
     });
     run('audio', () => audio.result());
     run('zone', collectZone);
+    // Late snapshots: SignalRGB may fill engine, meters, properties or the viewport after load.
+    run('env@5s', collectViewport);
+    run('engine@5s', collectEngine);
+    run('meters@5s', collectMeters);
+    run('properties@5s', collectPropertyValues);
   }, MEASURE_MS);
 });
 

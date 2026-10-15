@@ -39,22 +39,23 @@ The canvas also shows a small status panel (white text on black): the build (`mo
 
 What to expect in the console, in order:
 
-| Line                      | When                                                                                                                  |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `alive`                   | First, from a small inline script, before the probe's code.                                                           |
-| `window-error`            | On any uncaught error or failed resource load.                                                                        |
-| `start`                   | Immediately.                                                                                                          |
-| `env`                     | Immediately: user agent, viewport, DPR, renderer.                                                                     |
-| `globals`                 | Immediately: globals a clean window doesn't have.                                                                     |
-| `properties`              | Immediately: raw property values, handlers before assign.                                                             |
-| `engine`, `meters`        | Immediately: `engine`'s shape and the meter values.                                                                   |
-| `changed`                 | On every `on<Prop>Changed` call, including load-time ones.                                                            |
-| `lifecycle`               | On `DOMContentLoaded` and `load`.                                                                                     |
-| `canvas-event`            | On every `onCanvasApiEvent` call.                                                                                     |
-| `features`                | Within about 3 s, when the Worker and fetch checks end.                                                               |
-| `timing`, `audio`, `zone` | At 5 s.                                                                                                               |
-| `REPORT`                  | At 6 s, 36 s and 66 s: everything above in one message, usually chunked.                                              |
-| `REPORT-delta`            | Every 30 s after that, only when something is new: new `changed` and `canvas-event` records, and globals added since. |
+| Line                                                | When                                                                                                                  |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `alive`                                             | First, from a small inline script, before the probe's code.                                                           |
+| `window-error`                                      | On any uncaught error or failed resource load.                                                                        |
+| `start`                                             | Immediately.                                                                                                          |
+| `env`                                               | Immediately: user agent, viewport, DPR, renderer.                                                                     |
+| `globals`                                           | Immediately: globals a clean window doesn't have.                                                                     |
+| `properties`                                        | Immediately: raw property values, handlers before assign.                                                             |
+| `engine`, `meters`                                  | Immediately: `engine`'s shape and the meter values.                                                                   |
+| `changed`                                           | On every `on<Prop>Changed` call, including load-time ones.                                                            |
+| `lifecycle`                                         | On `DOMContentLoaded` and `load`.                                                                                     |
+| `canvas-event`                                      | On every `onCanvasApiEvent` call.                                                                                     |
+| `features`                                          | Within about 3 s, when the Worker and fetch checks end.                                                               |
+| `timing`, `audio`, `zone`                           | At 5 s.                                                                                                               |
+| `env@5s`, `engine@5s`, `meters@5s`, `properties@5s` | At 5 s: the same data again, in case SignalRGB fills it in after load.                                                |
+| `REPORT`                                            | At 6 s, 36 s and 66 s: everything above in one message, usually chunked.                                              |
+| `REPORT-delta`                                      | Every 30 s after that, only when something is new: new `changed` and `canvas-event` records, and globals added since. |
 
 A section that fails logs `[probe] <section>-error {"message":…,"stack":…}` instead; send those too.
 

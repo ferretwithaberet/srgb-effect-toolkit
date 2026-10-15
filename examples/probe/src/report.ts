@@ -1,4 +1,7 @@
+import { collectEngine, collectMeters } from './collect/engine';
+import { collectViewport } from './collect/env';
 import { collectGlobals } from './collect/globals';
+import { collectPropertyValues } from './collect/properties';
 import { guard, logJson, sections, serialize, type Json } from './log';
 import { now, state } from './state';
 
@@ -38,6 +41,15 @@ function globalsDiff(before: Record<string, string> | null, after: Record<string
   return { added, removed, retyped };
 }
 
+/** Serializes a fresh snapshot, or its error. */
+function snapshot(collect: () => unknown): Json {
+  try {
+    return serialize(collect());
+  } catch (error) {
+    return serialize({ error });
+  }
+}
+
 /** Logs `[probe] REPORT {...}`: every section so far plus the handler and event records. */
 function logReport(): void {
   state.reportAt = now();
@@ -58,6 +70,10 @@ function logReport(): void {
     sections,
     // Recomputed now, to catch globals injected after the script started.
     globalsAtReport,
+    envAtReport: snapshot(collectViewport),
+    engineAtReport: snapshot(collectEngine),
+    metersAtReport: snapshot(collectMeters),
+    propertiesAtReport: snapshot(collectPropertyValues),
     changedCount: state.changed.length,
     changed: state.changed.slice(-MAX_RECORDS),
     canvasEventCount: state.canvasEvents.length,
