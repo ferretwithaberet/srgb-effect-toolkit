@@ -95,6 +95,7 @@ export function createScreenTab({ screen, engine, config, raf }: DevtoolsContext
   from.addEventListener('input', onGradient);
   to.addEventListener('input', onGradient);
 
+  let scratch: HTMLCanvasElement | undefined;
   const draw = () => {
     const ctx = preview.getContext('2d');
     if (!ctx) return;
@@ -106,11 +107,15 @@ export function createScreenTab({ screen, engine, config, raf }: DevtoolsContext
       }
       return;
     }
-    const image = new ImageData(frame.pixels, frame.width, frame.height);
-    const scratch = document.createElement('canvas');
-    scratch.width = frame.width;
-    scratch.height = frame.height;
-    scratch.getContext('2d')?.putImageData(image, 0, 0);
+    // One scratch canvas, resized only when the captured frame size changes.
+    scratch ??= document.createElement('canvas');
+    if (scratch.width !== frame.width || scratch.height !== frame.height) {
+      scratch.width = frame.width;
+      scratch.height = frame.height;
+    }
+    scratch
+      .getContext('2d')
+      ?.putImageData(new ImageData(frame.pixels, frame.width, frame.height), 0, 0);
     ctx.drawImage(scratch, 0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
     ctx.strokeStyle = '#ff1744';
     ctx.fillStyle = '#ff1744';

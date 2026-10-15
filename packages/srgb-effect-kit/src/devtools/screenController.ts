@@ -170,8 +170,13 @@ export function createScreenController(
     const tick = (time: number) => {
       frameId = undefined;
       if (capture !== opened) return;
-      if (last === undefined || time - last >= CAPTURE_INTERVAL_MS) {
+      if (last === undefined) {
+        // The first frame was sampled by `run`; the interval counts from this tick.
         last = time;
+      } else if (time - last >= CAPTURE_INTERVAL_MS) {
+        // Advance by whole intervals so a 60 Hz display averages one sample per 100 ms.
+        last += CAPTURE_INTERVAL_MS;
+        if (time - last >= CAPTURE_INTERVAL_MS) last = time;
         if (!step()) return;
       }
       if (capture === opened) frameId = raf.request(tick);
@@ -193,6 +198,8 @@ export function createScreenController(
       notify();
       return;
     }
+    // No stale computed values may linger while a permission prompt is open.
+    writeManual();
     notify();
     try {
       const opened = await openCapture(() => {
@@ -251,8 +258,11 @@ export function createScreenController(
  */
 export async function openScreenCapture(
   onEnded: () => void,
-  media: MediaDevices = navigator.mediaDevices,
+  media: MediaDevices | undefined = navigator.mediaDevices,
 ): Promise<FrameSource> {
+  if (typeof media?.getDisplayMedia !== 'function') {
+    throw new Error('[srgb-effect] screen capture needs a secure context (https or localhost)');
+  }
   const stream = await media.getDisplayMedia({ video: true, audio: false });
   const tracks = stream.getTracks();
   let video: HTMLVideoElement | undefined;
@@ -269,7 +279,7 @@ export async function openScreenCapture(
   };
 
   try {
-    if (stream.getVideoTracks().length === 0) throw new Error('No video was shared.');
+    if (stream.getVideoTracks().length === 0) throw new Error('[srgb-effect] No video was shared.');
     for (const track of tracks) track.addEventListener('ended', ended);
     video = document.createElement('video');
     video.muted = true;
@@ -278,7 +288,8 @@ export async function openScreenCapture(
     await video.play();
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d', { willReadFrequently: true });
-    if (!context) throw new Error('A 2D canvas is not available to read the capture.');
+    if (!context)
+      throw new Error('[srgb-effect] A 2D canvas is not available to read the capture.');
     const shown = video;
 
     return {

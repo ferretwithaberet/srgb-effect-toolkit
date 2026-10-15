@@ -3,7 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CONFIG, MANIFEST } from '../../../../test/helpers/devtools';
 import type { DevtoolsContext } from '../../context';
 import { createEngineMock } from '../../engine';
-import { createScreenController, type OpenScreenCapture } from '../../screenController';
+import {
+  createScreenController,
+  type CaptureFrame,
+  type OpenScreenCapture,
+} from '../../screenController';
 import { createStorage } from '../../storage';
 import { createScreenTab, previewRects, zoneColor } from './screen';
 
@@ -55,6 +59,74 @@ describe('Screen tab', () => {
       expect(find('[data-srgb-devtools="screen-error"]').textContent).toBe('Permission denied'),
     );
     expect(find('[data-srgb-screen-source="solid"]').getAttribute('aria-pressed')).toBe('true');
+  });
+});
+
+describe('Screen tab preview', () => {
+  const frame: CaptureFrame = {
+    pixels: new Uint8ClampedArray(4 * 4 * 4),
+    width: 4,
+    height: 4,
+    sourceWidth: 1920,
+    sourceHeight: 1080,
+  };
+
+  it('draws the frame through one reused scratch canvas, then outlines the meters', async () => {
+    const ctx = {
+      fillRect: vi.fn(),
+      drawImage: vi.fn(),
+      putImageData: vi.fn(),
+      strokeRect: vi.fn(),
+      fillText: vi.fn(),
+    };
+    vi.mocked(HTMLCanvasElement.prototype.getContext).mockReturnValue(ctx as never);
+    vi.stubGlobal(
+      'ImageData',
+      class {
+        data: Uint8ClampedArray;
+        width: number;
+        height: number;
+        constructor(data: Uint8ClampedArray, width: number, height: number) {
+          this.data = data;
+          this.width = width;
+          this.height = height;
+        }
+      },
+    );
+    const created = vi.spyOn(document, 'createElement');
+    const frames: FrameRequestCallback[] = [];
+    const raf = { request: (cb: FrameRequestCallback) => frames.push(cb), cancel: vi.fn() };
+    const engine = createEngineMock(MANIFEST.meters);
+    const storage = createStorage(MANIFEST.title, () => localStorage);
+    let current = frame;
+    const screen = createScreenController(engine, MANIFEST.meters, storage, raf, async () => ({
+      read: () => current,
+      stop: () => {},
+    }));
+    const tab = createScreenTab({
+      screen,
+      engine,
+      config: CONFIG,
+      raf,
+    } as unknown as DevtoolsContext);
+    const flush = () => frames.splice(0).forEach((cb) => cb(0));
+    tab.show?.();
+    await screen.setSource({ kind: 'capture' });
+    flush();
+
+    expect(ctx.putImageData).toHaveBeenCalledOnce();
+    expect(ctx.drawImage).toHaveBeenCalledOnce();
+    expect(ctx.strokeRect).toHaveBeenCalledTimes(2);
+    expect(ctx.fillText).toHaveBeenCalledWith('health', expect.any(Number), expect.any(Number));
+    expect(ctx.fillText).toHaveBeenCalledWith('mana', expect.any(Number), expect.any(Number));
+
+    const canvasesBefore = created.mock.calls.filter(([tag]) => tag === 'canvas').length;
+    current = { ...frame };
+    screen.setMeter('score', 3);
+    flush();
+    expect(ctx.putImageData).toHaveBeenCalledTimes(2);
+    expect(created.mock.calls.filter(([tag]) => tag === 'canvas').length).toBe(canvasesBefore);
+    vi.unstubAllGlobals();
   });
 });
 

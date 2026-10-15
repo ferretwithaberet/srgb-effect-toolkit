@@ -79,6 +79,37 @@ describe('Meters tab', () => {
     expect(value('health')).toBe('1.00 (capture)');
   });
 
+  it('keeps what is typed into a focused number field inside a shadow root', () => {
+    const { tab, engine, control, flush } = mount();
+    const host = document.createElement('div');
+    document.body.append(host);
+    host.attachShadow({ mode: 'open' }).append(tab.element);
+    const score = control('score');
+    score.focus();
+    expect(host.shadowRoot!.activeElement).toBe(score);
+
+    score.value = '-';
+    score.dispatchEvent(new Event('input'));
+    flush();
+    expect(engine.vision.score).toBe(-1);
+    score.value = '-1';
+    score.dispatchEvent(new Event('input'));
+    flush();
+    expect(score.value).toBe('-1');
+    expect(engine.vision.score).toBe(-1);
+
+    score.value = '7';
+    score.dispatchEvent(new Event('input'));
+    score.value = '';
+    score.dispatchEvent(new Event('input'));
+    flush();
+    expect(score.value).toBe('');
+    expect(engine.vision.score).toBe(7);
+    score.dispatchEvent(new Event('change'));
+    expect(score.value).toBe('7');
+    host.remove();
+  });
+
   it('formats values per meter type', () => {
     const [health, , , score] = MANIFEST.meters;
     expect(formatMeterValue(health, 0.5)).toBe('0.50');

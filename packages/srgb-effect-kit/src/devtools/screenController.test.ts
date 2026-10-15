@@ -131,6 +131,7 @@ describe('createScreenController', () => {
     expect(controller.isAutomatic('victory')).toBe(false);
 
     current = solidFrame([0, 0, 200]);
+    advance(1);
     advance(CAPTURE_INTERVAL_MS);
     expect(engine.vision.health).toBe(0);
     expect(engine.vision.mana).toBe(1);
@@ -151,15 +152,21 @@ describe('createScreenController', () => {
 
   it('falls back to the previous source when capture fails or ends', async () => {
     let ended = () => {};
-    const { controller } = setup(async (onEnded) => {
+    const stop = vi.fn();
+    const { controller, pending } = setup(async (onEnded) => {
       ended = onEnded;
-      return { read: () => undefined, stop: vi.fn() };
+      return { read: () => solidFrame([0, 200, 0]), stop };
     });
     await controller.setSource({ kind: 'solid', color: '#123456' });
     await controller.setSource({ kind: 'capture' });
+    expect(pending()).toBe(1);
     ended();
     await Promise.resolve();
     expect(controller.source).toEqual({ kind: 'solid', color: '#123456' });
+    expect(stop).toHaveBeenCalledOnce();
+    expect(pending()).toBe(0);
+    expect(controller.error).toBeUndefined();
+    expect(controller.frame).toBeUndefined();
 
     const failing = setup(async () => {
       throw new Error('Permission denied');
@@ -181,16 +188,47 @@ describe('capture hygiene', () => {
     const { controller, advance, pending, source } = open(read);
     await controller.setSource({ kind: 'capture' });
     expect(read).toHaveBeenCalledTimes(1);
-    advance(1);
-    expect(read).toHaveBeenCalledTimes(2);
+    advance(1); // anchors the interval; no second sample of the first frame
+    expect(read).toHaveBeenCalledTimes(1);
+    advance(CAPTURE_INTERVAL_MS / 2);
+    expect(read).toHaveBeenCalledTimes(1);
     advance(CAPTURE_INTERVAL_MS / 2);
     expect(read).toHaveBeenCalledTimes(2);
-    advance(CAPTURE_INTERVAL_MS / 2);
-    expect(read).toHaveBeenCalledTimes(3);
     expect(pending()).toBe(1);
     await controller.setSource({ kind: 'solid', color: '#000000' });
     expect(pending()).toBe(0);
     expect(source.stop).toHaveBeenCalledOnce();
+  });
+
+  it('keeps a steady 100 ms cadence on a 60 Hz clock and catches up after a stall', async () => {
+    const read = vi.fn(() => solidFrame([0, 200, 0]));
+    const { controller, advance } = open(read);
+    await controller.setSource({ kind: 'capture' });
+    advance(16);
+    read.mockClear();
+    for (let i = 0; i < 60; i += 1) advance(16.67);
+    // 1000 ms of 16.67 ms frames: about 10 samples, not the ~8 a reset-to-now cadence gives.
+    expect(read.mock.calls.length).toBeGreaterThanOrEqual(9);
+    read.mockClear();
+    advance(1000); // a long stall samples once, then resumes the cadence
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+
+  it('writes manual values straight away when capture is re-opened', async () => {
+    let resolve: (source: FrameSource) => void = () => {};
+    let first = true;
+    const source: FrameSource = { read: () => solidFrame([0, 200, 0]), stop: vi.fn() };
+    const { controller, engine } = setup(() =>
+      first ? ((first = false), Promise.resolve(source)) : new Promise((r) => (resolve = r)),
+    );
+    controller.setMeter('health', 0.5);
+    await controller.setSource({ kind: 'capture' });
+    expect(engine.vision.health).toBe(1);
+    const reopening = controller.setSource({ kind: 'capture' });
+    expect(source.stop).toHaveBeenCalledOnce();
+    expect(engine.vision.health).toBe(0.5);
+    resolve({ read: () => undefined, stop: vi.fn() });
+    await reopening;
   });
 
   it('stops the capture and falls back to the default source when the first read throws', async () => {
@@ -214,6 +252,7 @@ describe('capture hygiene', () => {
       return solidFrame([0, 200, 0]);
     });
     await controller.setSource({ kind: 'capture' });
+    advance(1);
     fail = true;
     advance(CAPTURE_INTERVAL_MS);
     expect(source.stop).toHaveBeenCalledOnce();
@@ -349,9 +388,18 @@ describe('openScreenCapture', () => {
     expect(tracks[0]!.listeners.size).toBe(0);
   });
 
+  it('explains that capture needs a secure context', async () => {
+    await expect(openScreenCapture(() => {}, undefined)).rejects.toThrow(
+      '[srgb-effect] screen capture needs a secure context (https or localhost)',
+    );
+    await expect(openScreenCapture(() => {}, {} as MediaDevices)).rejects.toThrow(/secure context/);
+  });
+
   it('stops the tracks of a share without video', async () => {
     const { media, tracks } = fakeStream(['audio']);
-    await expect(openScreenCapture(() => {}, media)).rejects.toThrow('No video was shared.');
+    await expect(openScreenCapture(() => {}, media)).rejects.toThrow(
+      '[srgb-effect] No video was shared.',
+    );
     expect(tracks[0]!.stop).toHaveBeenCalledOnce();
   });
 

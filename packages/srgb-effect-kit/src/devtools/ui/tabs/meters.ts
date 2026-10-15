@@ -37,18 +37,30 @@ export function createMetersTab({ screen, engine, config, raf }: DevtoolsContext
   const rows = meters.map((meter) => {
     const input = meterInput(meter);
     const output = h('output', { class: 'value', 'data-srgb-meter-value': meter.meter });
-    input.addEventListener(input instanceof HTMLSelectElement ? 'change' : 'input', () =>
-      screen.setMeter(meter.meter, Number(input.value)),
-    );
-    const update = () => {
+    const commit = (final: boolean) => {
+      const raw = input.value.trim();
+      // An empty or partial number ('' or '-') is mid-edit: neither write nor overwrite it.
+      if (raw === '' || !Number.isFinite(Number(raw))) {
+        if (final) update(true);
+        return;
+      }
+      screen.setMeter(meter.meter, Number(raw));
+    };
+    const update = (restore = false) => {
       const automatic = screen.isAutomatic(meter.meter);
       input.disabled = automatic;
-      if (!automatic && input.ownerDocument.activeElement !== input) {
+      // The drawer lives in a shadow root, where `document.activeElement` is only the host.
+      const focused = (input.getRootNode() as Document | ShadowRoot).activeElement === input;
+      if (!automatic && (restore || !focused))
         input.value = String(screen.manualValue(meter.meter));
-      }
       const value = engine.vision[meter.meter] ?? 0;
       output.textContent = `${formatMeterValue(meter, value)}${automatic ? ' (capture)' : ''}`;
     };
+    if (input instanceof HTMLSelectElement) input.addEventListener('change', () => commit(true));
+    else {
+      input.addEventListener('input', () => commit(false));
+      input.addEventListener('change', () => commit(true));
+    }
     const row = h(
       'div',
       { class: 'row', 'data-srgb-meter': meter.meter },
