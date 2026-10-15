@@ -3,14 +3,14 @@
 import { createAudioRecorder } from './collect/audio';
 import { collectEngine, collectMeters } from './collect/engine';
 import { collectEnv, collectViewport } from './collect/env';
-import { collectFeatures } from './collect/features';
+import { collectRiskyFeatures, collectSafeFeatures } from './collect/features';
 import { collectGlobals } from './collect/globals';
 import { installHandlers, installLifecycle } from './collect/handlers';
 import { collectProperties, collectPropertyValues } from './collect/properties';
 import { collectStart } from './collect/start';
 import { createTimingRecorder } from './collect/timing';
 import { collectZone } from './collect/zone';
-import { guard, logError, logSection, run } from './log';
+import { guard, run } from './log';
 import { startReports } from './report';
 import { now, state } from './state';
 import { startStatus } from './status';
@@ -29,14 +29,7 @@ guard('handlers', installHandlers);
 run('engine', collectEngine);
 run('meters', collectMeters);
 
-try {
-  collectFeatures().then(
-    (features) => logSection('features', features),
-    (error: unknown) => logError('features', error),
-  );
-} catch (error) {
-  logError('features', error);
-}
+guard('features', collectSafeFeatures);
 
 // Timing and audio: sampled on every animation frame for MEASURE_MS. A timer, not rAF, ends the
 // window, so the sections are logged even if rAF never fires.
@@ -65,6 +58,8 @@ guard('timing', () => {
     run('engine@5s', collectEngine);
     run('meters@5s', collectMeters);
     run('properties@5s', collectPropertyValues);
+    // Last: WebGL, Worker and fetch can hang or crash a fragile engine.
+    guard('features', () => void collectRiskyFeatures());
   }, MEASURE_MS);
 });
 
