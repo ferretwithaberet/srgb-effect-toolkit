@@ -61,7 +61,7 @@ createLoop(({ dt }) => {
 }).start();
 ```
 
-Add `src/srgb-effect.d.ts` to `.gitignore`: it is generated on every `vite` and `vite build`, so do not commit it. Because the template's `"build": "tsc && vite build"` would run `tsc` before the file exists on a fresh clone, change the script to `"build": "vite build && tsc"`. Run `pnpm dev` once so your editor has the types too. The effect itself only runs inside SignalRGB for now, because the dev server does not define the property globals yet ([why](docs/globals.md#globals-in-vite-dev)). Then build:
+Add `src/srgb-effect.d.ts` to `.gitignore`: it is generated on every `vite` and `vite build`, so do not commit it. Because the template's `"build": "tsc && vite build"` would run `tsc` before the file exists on a fresh clone, change the script to `"build": "vite build && tsc"`. `pnpm dev` also generates the types for your editor. It runs the effect in the browser, with [devtools](docs/devtools.md) that simulate SignalRGB's globals, controls, audio, screen, meters and canvas API events. Then build:
 
 ```sh
 pnpm dev
@@ -78,6 +78,7 @@ Copy `dist/my-effect.html` into `C:\Users\<username>\AppData\Local\VortxEngine\a
 - [Configuration](docs/configuration.md): every `srgbEffect()` option, the markup each control and meter generates, and the validation rules.
 - [Globals](docs/globals.md): property globals, `on<Prop>Changed` handlers, `engine` and `onCanvasApiEvent`, and how they are typed.
 - [Runtime API](docs/runtime-api.md): reference for the loop, color, audio, screen-zone, meter, renderer and boolean helpers.
+- [Devtools](docs/devtools.md): how `pnpm dev` simulates SignalRGB, and each tab of the drawer.
 - [Build](docs/build.md): what `vite build` produces, the `script` modes (module by default), and every build error and warning.
 - [SignalRGB notes](docs/signalrgb-notes.md): renderers, frame rate, the visible area, and what is still unverified.
 
@@ -108,13 +109,27 @@ pnpm test
 
 CI runs the build before the typecheck, so the examples generate their git-ignored `src/srgb-effect.d.ts` before it is checked. `pnpm format:fix` applies Prettier.
 
+The devtools also have end-to-end tests. They drive `examples/basic-2d` in Chromium against the built package:
+
+```sh
+pnpm build
+pnpm exec playwright install chromium   # once; or set CHROMIUM_PATH to a local Chromium
+pnpm test:e2e
+```
+
+To use a system Chromium instead of Playwright's download, for example on a machine where it is not installed:
+
+```sh
+CHROMIUM_PATH=/usr/bin/chromium pnpm test:e2e
+```
+
 Layout:
 
 - `packages/srgb-effect-kit/`: the published package. `src/vite` is the Vite plugin, `src/runtime` the code that ships inside effects, and `src/shared` the environment-independent manifest types, validation, `<meta>` serializer and type generator.
 - `examples/`: example effects, built against the workspace package.
 - `docs/`: user documentation.
 
-Status: the core plugin and runtime are built. The in-browser devtools drawer (Plan 2) and the probe effect that verifies behaviour on real SignalRGB (Plan 3) are not built yet.
+Status: the plugin, the runtime and the devtools are built. The probe effect that verifies behaviour on real SignalRGB (Plan 3) is not built yet, so the simulated user agents, raw formats and load-time call order are provisional.
 
 ## License
 

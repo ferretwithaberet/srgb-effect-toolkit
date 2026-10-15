@@ -114,7 +114,7 @@ window.onTintChanged = () => {
 };
 ```
 
-A bare assignment, `onTintChanged = () => { … }`, also type-checks and works in the built effect. The build adds a small prelude script that creates every handler global before your code runs, so the assignment does not throw in strict mode. The dev server has no prelude, so prefer `window.`.
+A bare assignment, `onTintChanged = () => { … }`, also type-checks and works. The build adds a small prelude script that creates every handler global before your code runs, so the assignment does not throw in strict mode. In `pnpm dev` the [devtools](devtools.md) create them the same way.
 
 ### Do not declare handlers at module scope
 
@@ -141,7 +141,7 @@ SignalRGB injects `engine`, typed `SRGBEngine`. Read it as `engine` or `window.e
 const loudness = engine.audio.level;
 ```
 
-`engine` exists only inside SignalRGB. In code that must also run in a plain browser, guard it with `globalThis.engine?.…`:
+SignalRGB injects `engine`, and in `pnpm dev` the [devtools](devtools.md) provide a mock. A built effect opened in a plain browser has no `engine`, so in code that must also run there, guard it with `globalThis.engine?.…`:
 
 ```ts
 const level = globalThis.engine?.audio.level ?? -100;
@@ -222,10 +222,16 @@ The full list is `SRGBEngine`, `EngineAudio`, `EngineZone`, `CanvasApiEvent` and
 
 ## Globals in `vite dev`
 
-The devtools drawer that will simulate SignalRGB in the browser is not built yet. Until it is, the dev server defines none of these globals:
+In `pnpm dev`, the [devtools](devtools.md) define every global on this page before your code runs:
 
-- Reading a property global, such as `let current = speed` at the top of a module, throws `ReferenceError: speed is not defined`.
-- A bare handler assignment, `onSpeedChanged = …`, throws a `ReferenceError`, because there is no prelude in dev. `window.onSpeedChanged = …` works.
-- `engine` is undefined. The runtime helpers treat that as silence and black screen zones.
+- Property globals hold SignalRGB's raw format, starting from your defaults.
+- Every handler global exists, so a bare assignment works.
+- `engine` is a mock.
 
-These all work inside SignalRGB. Test behaviour there, and use the dev server to check the generated markup and catch config and type errors.
+On `DOMContentLoaded`, the devtools call each `on<Prop>Changed` once, like SignalRGB does at load. With the default `devtools: 'full'`, the drawer's controls change the globals and call the handlers on every change. `devtools: 'minimal'` keeps the globals at their defaults, with nothing on screen.
+
+With `devtools: 'none'` none of this happens:
+
+- reading a property global throws `ReferenceError`;
+- a bare handler assignment throws too;
+- `engine` is undefined.

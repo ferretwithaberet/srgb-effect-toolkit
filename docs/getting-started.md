@@ -152,7 +152,7 @@ Open the URL Vite prints and view the page source. The `<head>` contains the gen
 <meta property="mode" label="Mode" type="list" values="Wave,Solid" default="Wave" />
 ```
 
-The effect itself does not run in the browser yet. SignalRGB injects the property globals, and the dev server does not define them until the devtools drawer is built. For now the browser console shows `ReferenceError: speed is not defined` on every frame. Use the dev server to check the generated markup and catch config errors, and test the effect's behaviour in SignalRGB.
+The effect runs in the page: the plugin's [devtools](devtools.md) define `speed`, `mode` and SignalRGB's other globals before your code runs, and call `onModeChanged` once at load, like SignalRGB. Click **SRGB** in the bottom-right corner to open the drawer. Move the Speed slider, or pick another Mode, and the rainbow follows. The red lines mark the 320×200 area SignalRGB shows.
 
 Stop the dev server with Ctrl+C.
 

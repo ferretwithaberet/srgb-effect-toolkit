@@ -12,6 +12,7 @@ To get there, the plugin changes how Vite builds:
 
 - **Everything is inlined.** Imported images, fonts and other assets, including `url()` references in CSS, become `data:` URLs. Stylesheets are inlined as `<style>` where their `<link>` was. Scripts are inlined at the end of `<body>`, as one inline `<script type="module">` by default.
 - **One script.** Code splitting is off, so dynamic `import()` calls are bundled into the main script instead of creating extra files. Vite's module preload helper is off too.
+- **No devtools.** The [devtools](devtools.md) exist only in `pnpm dev`; nothing of them reaches the build.
 - **No `public/` copy.** Files in `public/` are not copied, because only the HTML file reaches SignalRGB. The build warns when `public/` has files; see [below](#public-files-are-left-out).
 - **Generated `<head>`.** The `<title>` and `<meta>` tags from your options are inserted at the start of `<head>`, after a leading `<meta charset>` (browsers expect the charset first). If `index.html` has no `<head>`, one is created.
 - **A prelude script.** A small classic script (always a plain `<script>`, in both `script` modes) runs before your code and creates every `on<Prop>Changed` global and `onCanvasApiEvent` that does not exist yet, set to `undefined`. That way a bare `onSpeedChanged = …` assignment does not throw in strict mode. See [Globals](globals.md#change-handlers-onpropchanged).

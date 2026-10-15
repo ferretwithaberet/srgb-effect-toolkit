@@ -399,12 +399,12 @@ SignalRGB renders effects with UltraLight or QtWebEngine, chosen by the user. Se
 const detectRenderer: (userAgent?: string) => Renderer;
 ```
 
-Identifies the renderer from a user agent string, by default `navigator.userAgent` (or `''` when there is no `navigator`). Returns `'ultralight'` or `'qtwebengine'` when a [signature](#renderer_signatures) matches, otherwise `'browser'`, as in `vite dev`.
+Identifies the renderer from a user agent string, by default `navigator.userAgent` (or `''` when there is no `navigator`). Returns `'ultralight'` or `'qtwebengine'` when a [signature](#renderer_signatures) matches, otherwise `'browser'`. In `vite dev` that is `'browser'` unless the [devtools' Renderer tab](devtools.md#renderer) simulates a renderer.
 
 ```ts
 import { detectRenderer } from 'srgb-effect-kit';
 
-detectRenderer(); // 'browser' in vite dev
+detectRenderer(); // 'browser' in vite dev, unless the devtools simulate a renderer
 detectRenderer('Mozilla/5.0 … Ultralight/1.4.0 Version/16.4.1 Safari/615.1.18.100.1'); // 'ultralight'
 ```
 

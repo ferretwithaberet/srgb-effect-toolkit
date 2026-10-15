@@ -62,7 +62,7 @@ createLoop(({ dt }) => {
 Good to know:
 
 - The plugin writes `src/srgb-effect.d.ts`, which types your globals, on every `vite` and `vite build`. Do not commit it: add it to `.gitignore` (Prettier respects `.gitignore`). Because the file does not exist on a fresh clone, change the template's `"build": "tsc && vite build"` to `"build": "vite build && tsc"`; running `pnpm dev` once also generates it for your editor.
-- The dev server does not define SignalRGB's globals yet; a dev-only devtools drawer that simulates them is planned. Until then, reading a property global or making a bare `onSpeedChanged = …` assignment throws a `ReferenceError` in the browser. Both work inside SignalRGB.
+- `pnpm dev` runs your effect in the browser: the devtools define SignalRGB's globals before your code and add a drawer for the property controls, audio, screen zones, meters, canvas API events and renderer/FPS simulation. They are never part of the build.
 - Assign change handlers to `window` (`window.onSpeedChanged = () => {}`). A top-level `function onSpeedChanged() {}` is module-scoped and never called; the plugin warns about it.
 - `dropConsole` (default `true`) strips `console.*` for SignalRGB's clean-console requirement, and minifies the script even when `build.minify` is `false`. It also strips third-party libraries' `console.*` calls, so set `dropConsole: false` to debug a production build.
 
@@ -72,6 +72,7 @@ Good to know:
 - [Configuration](https://github.com/ferretwithaberet/srgb-effect-toolkit/blob/main/docs/configuration.md): every option, the generated markup, and the validation rules.
 - [Globals](https://github.com/ferretwithaberet/srgb-effect-toolkit/blob/main/docs/globals.md): property globals, change handlers, `engine` and `onCanvasApiEvent`.
 - [Runtime API](https://github.com/ferretwithaberet/srgb-effect-toolkit/blob/main/docs/runtime-api.md): reference for every export of `srgb-effect-kit`.
+- [Devtools](https://github.com/ferretwithaberet/srgb-effect-toolkit/blob/main/docs/devtools.md): how `pnpm dev` simulates SignalRGB.
 - [Build](https://github.com/ferretwithaberet/srgb-effect-toolkit/blob/main/docs/build.md): the build output, the `script` modes (module by default), and every build error and warning.
 - [SignalRGB notes](https://github.com/ferretwithaberet/srgb-effect-toolkit/blob/main/docs/signalrgb-notes.md): renderers, frame rate, and what is still unverified.
 

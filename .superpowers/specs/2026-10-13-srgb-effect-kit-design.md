@@ -36,7 +36,7 @@ Prior art: `/home/ferret/Projects/Github/butterchurn-srgb` (hand-written `signal
 | Projects | One effect per Vite project. |
 | Canvas | Optional. No validation of canvas presence or size. Content may extend beyond 320×200; SignalRGB shows only the top-left 320×200. |
 | Testing against real SignalRGB | Windows VM running SignalRGB is the source of truth (probe effect). Daily dev happens in the browser with devtools. |
-| Out of scope for v1 | CLI, deploy-to-folder, LED sampling preview, scaffolder (`create-srgb-effect`), native UltraLight/QtWebEngine runners, Playwright compat tests. |
+| Out of scope for v1 | CLI, deploy-to-folder, LED sampling preview, scaffolder (`create-srgb-effect`), native UltraLight/QtWebEngine runners, Playwright compat tests in those renderers (Playwright end-to-end tests of the dev-mode devtools in Chromium are in scope, §11). |
 
 ## 3. Background facts
 
@@ -197,7 +197,7 @@ export default defineConfig({
 - `script?: 'classic' | 'module'`. Default `'module'` (§8). Decision 2026-10-15: follow Vite conventions, since SignalRGB already loads butterchurn-srgb, which ships an inline `<script type="module">`; `'classic'` stays as opt-in.
 - `dropConsole?: boolean`. Default `true`.
 - `target?: string | string[]`. Default `'es2020'`, provisional until the probe (§9).
-- `devtools?: boolean | { fireChangedOnLoad?: boolean }`. Default `true`; applies in serve mode only. `fireChangedOnLoad` defaults to `true`, which mirrors SignalRGB's load-time calls (§3.2).
+- `devtools?: 'none' | 'minimal' | 'full' | { mode?: 'none' | 'minimal' | 'full'; fireChangedOnLoad?: boolean }`. Default `'full'`; applies in serve mode only (§10.1). A string means `{ mode, fireChangedOnLoad: true }`. `fireChangedOnLoad` defaults to `true`, which mirrors SignalRGB's load-time calls (§3.2). Decision 2026-10-15: modes replace the boolean form; `true`/`false` are rejected.
 
 `srgbEffect` uses a `const` type parameter so literal types are preserved. That gives config-time type errors for mistakes such as a `list` default that is not in `values`.
 
@@ -385,56 +385,94 @@ Findings are recorded in `docs/probe-findings.md` and feed into:
 
 ## 10. Devtools (serve mode only)
 
-### 10.1 Injection and bootstrap
+Refined by Plan 2 (`.superpowers/plans/2026-10-15-srgb-effect-kit-devtools.md`). §10.6 lists what changed from the first version of this section.
 
-In serve mode, `transformIndexHtml` does the following:
+### 10.1 Modes, injection and bootstrap
 
-- Injects the §5.3 head markup, for parity with the build.
-- Injects the devtools module script **before** the user's scripts. Module scripts execute in document order, so the devtools bootstrap runs first.
-- Passes the manifest as a virtual module, `virtual:srgb-effect/manifest`.
+- **Modes.** `devtools` is `'none' | 'minimal' | 'full'`, or `{ mode?, fireChangedOnLoad? }`. The default is `'full'`, and a string means `{ mode, fireChangedOnLoad: true }`. Each mode does the following in serve mode:
+  - `'none'` injects nothing: no prelude, globals, engine, relay or drawer.
+  - `'minimal'` fully simulates the SignalRGB environment, with nothing visible:
+    - the handler prelude;
+    - every property global at its manifest **default** (no localStorage, since nothing can change values);
+    - the `engine` mock;
+    - the load-time calls per `fireChangedOnLoad`;
+    - the `POST /canvas/event` relay.
 
-The bootstrap, synchronously at module top level:
+    It has no drawer, no marker, no renderer simulation (the renderer stays `browser`) and no console counter.
+  - `'full'` is `'minimal'` plus everything in §10.2–§10.4, with values persisted.
+- **The plugin.** In serve mode, the `srgb-effect:devtools` plugin (`apply: 'serve'`, omitted for `'none'`) does three things:
+  - Injects `<script type="module" src="/@id/__x00__virtual:srgb-effect/devtools">` with `injectTo: 'head-prepend'` (`transformIndexHtml`, `order: 'pre'`). Vite prefixes `base`. Module scripts execute in document order, so the bootstrap runs before the effect's scripts. The core plugin still injects the §5.3 head markup, for parity with the build.
+  - Serves the virtual module. It imports the devtools bundle by absolute path and calls `startDevtools(config, { hot: import.meta.hot })`. The config is `{ manifest, fireChangedOnLoad }`, inlined as JSON.
+  - Serves `POST /canvas/event`, described in §10.4.
+- **The bundles.** There are two internal tsdown entries, built by separate configs so each is self-contained: `dist/devtools/index.js` (full) and `dist/devtools/minimal.js`. Both target the browser platform and neither is exported. `minimal.js` contains no drawer, tab, renderer or console-counter code. The plugin resolves the mode's bundle relative to its own module:
+  - `dist/vite/index.js` → `dist/devtools/{index,minimal}.js` when running from the package;
+  - `src/vite/` → `src/devtools/{index,minimal}.ts` when running from source in tests.
 
-- Sets every property global from localStorage or the default, in SignalRGB raw format.
-- Defines the `on<Prop>Changed` prelude.
-- Installs the `engine` mock (`audio`, `zone`, `vision`).
-- If `fireChangedOnLoad` is set (the default, §5.1), fires every `on<Prop>Changed` in property order on `DOMContentLoaded`.
-  - `DOMContentLoaded` fires after all module scripts have executed, so user handlers are already assigned.
-  - A microtask would not work here: the devtools module runs first, so a microtask would fire before user code.
+  Vite serves it through `/@fs/`. Resolved import ids are treated as safe, so this works from `node_modules`, workspaces and `file:` installs.
+- **The bootstrap.** The full entry, synchronously, at module top level, does the following. The minimal entry does steps 1, 4 and 5 (with defaults) and 7, through the same `startSimulation()`.
+  1. Defines every `on<Prop>Changed` and `onCanvasApiEvent` global that does not exist (the prelude guarantee, from `handlerGlobalNames`).
+  2. Applies the persisted renderer simulation: the user agent and, for UltraLight, the rAF throttle.
+  3. Wraps the console for the Console tab.
+  4. Sets every property global from localStorage or the default, in raw format. Invalid stored values fall back to the default; numbers are clamped and rounded.
+  5. Installs the `engine` mock:
+     - `audio`: silent;
+     - `zone`: 560-cell arrays;
+     - `vision`: every meter at 0, and −1 for `ocr_numeric`.
+  6. Restores the audio mode and the screen source (solid or gradient only).
+  7. Subscribes to the canvas-event relay.
 
-localStorage keys are namespaced by effect title (`srgb-effect-kit:<title>:…`), because all projects share the `localhost:5173` origin.
-
-Devtools are never present in build output.
+  On `DOMContentLoaded`, it fires every `on<Prop>Changed` in property order if `fireChangedOnLoad` is set (the default), then mounts the drawer. `DOMContentLoaded` fires after all module scripts have executed; a microtask would fire before user code.
+- **Handler calls.** Handlers are called with no arguments and `this === window`. Errors go to `reportError`, and the remaining handlers still run.
+- **Storage** (full mode only). localStorage keys are `srgb-effect-kit:<title>:<key>`, because all projects share the `localhost:5173` origin. The keys are `properties`, `drawer`, `audio`, `screen`, `meters`, `renderer` and `canvas-api`. Every read is validated.
+- **Build output.** The devtools are never present in it. Both an integration test and an e2e test assert this.
 
 ### 10.2 Page rendering
 
-- The effect page renders as-is, at full size. No iframe.
-- **Visible-area marker:** a fixed overlay with `pointer-events: none`.
-  - Red lines are drawn along x=320 and y=200, just outside the visible area, so no visible pixel is covered.
-  - Optional dimming outside the 320×200 region.
-  - Toggleable.
+- **No iframe.** The effect page renders as-is, at full size.
+- **The shadow host.** `<srgb-effect-devtools>`, appended to `<html>` so that effect code rewriting `<body>` keeps it. It is `position: fixed; inset: 0; pointer-events: none`, with an open shadow root.
+- **The visible-area marker.** A red line at x = 320 (201 px high) and one at y = 200 (321 px wide), just outside the visible pixels. Optional dimming covers the region outside 320×200. Both are toggleable and persisted.
 
 ### 10.3 Drawer UI
 
 The drawer follows the style of TanStack Query/Router devtools.
 
-- It lives in a Shadow DOM root with `position: fixed` and a high z-index, so it is isolated from the effect's CSS and does not affect the effect's layout.
-- It is collapsed by default to a small toggle button in the bottom-right corner.
-- When open, it docks bottom or right and is resizable. Open state, dock side and size are persisted.
-- It is written in vanilla TypeScript and CSS, with no UI framework dependency.
+- **Isolation.** It lives in the shadow root. It is isolated from the effect's CSS and does not affect the effect's layout.
+- **Collapsed state.** It is collapsed by default to a toggle button in the bottom-right corner. The button carries a badge with the console count.
+- **Open state.** When open, it docks bottom or right and is resizable by dragging its inner edge, between 160 px and 90% of the viewport. A drag applies size changes once per animation frame and persists only when it ends. Switching dock or resizing the window clamps the rendered size but keeps the saved preference. Open state, dock side, size, selected tab and marker toggles are persisted.
+- **Tabs.** Each tab is created the first time it is selected. Tabs that do periodic work run it only while visible.
+- **Implementation.** Vanilla TypeScript, with the CSS as a TS string. There is no UI framework and no runtime dependency.
 
 ### 10.4 Tabs
 
 | Tab | Behaviour |
 |---|---|
-| Properties | One control per type: number → slider plus value; hue → slider with hue-gradient track; boolean → toggle; color → color input; textfield → text input firing per keystroke; list → `<select>`. A change sets the global in raw format and calls `window.on<Prop>Changed?.()`. Includes reset-to-defaults. |
-| Audio | Modes: silent / random / microphone / system capture (`getDisplayMedia` audio). Each frame writes `engine.audio.{level, width, density, freq[200]}`. Ported from butterchurn-srgb, with `width` added. |
-| Screen | Source: solid color / gradient / screen capture (`getDisplayMedia` video). The source is downsampled to a 28×20 grid, which writes the `engine.zone` HSL arrays. |
-| Meters | For each meter, a manual value control: `linear`/`area` 0–1, `ocr_textmatch` −1/0/1, `ocr_numeric` integer. When screen capture is active, `linear` and `area` values are computed from captured pixels using the meter's region and HSL ranges, with a region overlay on the capture preview. OCR meters stay manual. Values are written to `engine.vision.<name>`. |
-| Canvas API | A sender/event form that calls `window.onCanvasApiEvent?.({ sender, event })`. The dev server also exposes `POST /canvas/event?sender=…&event=…`, matching SignalRGB's endpoint shape. Requests are relayed over Vite's WebSocket (`server.ws.send` → `import.meta.hot.on`), so real game or app integrations can target the dev server by changing the port. |
-| Renderer | Simulates `browser` / `ultralight` / `qtwebengine` together with an SRGB FPS setting (20–60). The simulation overrides `navigator.userAgent` using the probe-recorded UA strings (placeholder strings until the probe runs), so `detectRenderer()` needs no dev hook. UltraLight simulation throttles `requestAnimationFrame` to the FPS setting; QtWebEngine simulation leaves rAF at native rate. |
-| SignalRGB view | A scaled-up, pixelated live copy of the visible 320×200, sampled at the simulated FPS. If a canvas covers the region, it is sampled directly. Otherwise it uses opt-in tab capture (`getDisplayMedia` with `preferCurrentTab`), cropped to the region. |
-| Console | Counts `console.log`/`warn`/`error` calls from effect code and shows a warning badge (the clean-console requirement). |
+| Properties | One control per type, in manifest order: number → slider plus value; hue → slider with a hue-gradient track for its min–max; boolean → checkbox; color → color input; textfield → text input, firing per keystroke; list → `<select>`. A change sets the global in raw format, persists it, then calls `window.on<Prop>Changed?.()`. Unchanged values do not fire. "Reset to defaults" fires only for values that change. |
+| Audio | Modes: silent, random, microphone (`getUserMedia`) and system (`getDisplayMedia` audio). Every native animation frame writes `engine.audio.{level, width, density, freq[200]}` in place. Live audio gives `level` = RMS dB of the mix, `width` = side/(mid+side) RMS, `density` = spectral flatness, and `freq` = 200 byte bands of a 512-point FFT. Choosing a capture mode stores `silent`, so only silent and random are restored after a reload. A failed capture (permission denied, no audio track shared, the share ending, a read error) returns to silent and shows a text error. |
+| Screen | Sources: solid color, left-to-right gradient, and screen capture (`getDisplayMedia` video). A capture is sampled every 100 ms at 480 px wide and averaged into the 28×20 grid, which writes the `engine.zone` arrays (hue 0–360, s/l 0–100, provisional). The preview shows the grid or, while capturing, the frame with meter regions outlined. A capture is never restored after a reload. A failed capture (including `[srgb-effect] screen capture needs a secure context (https or localhost)` when `navigator.mediaDevices` is missing) or the share ending returns to the previous solid or gradient source, or to black after a read error, and shows a text error. |
+| Meters | A manual value control per meter: `linear`/`area` 0–1, `ocr_textmatch` −1/0/1, `ocr_numeric` an integer ≥ −1. Partial input such as `-` is kept while typing and committed on change. Values are clamped and persisted, and written to `engine.vision.<name>`. While a screen capture is active, `linear` and `area` values are computed from the captured pixels. The region is the base region, or the resolution override that matches the capture's size exactly or its aspect within 3%. The value is the fraction of pixels inside the meter's h/s/l ranges. `hdr` ranges are not simulated, and OCR meters stay manual. |
+| Canvas API | A sender/event form (persisted) that calls `window.onCanvasApiEvent?.({ sender, event })`, the equivalent `curl` command, and a history of the last 20 events from both sources. The dev server serves `POST /canvas/event?sender=…&event=…` at that path whatever the `base`. Missing parameters become `''`. It answers 204 with `Access-Control-Allow-Origin: *`, and 405 for other methods; Vite's CORS middleware answers preflights. Requests are relayed over Vite's WebSocket (`server.ws.send('srgb-effect:canvas-event', …)` → `import.meta.hot.on`). |
+| Renderer | Simulates `browser` / `ultralight` / `qtwebengine` together with an SRGB FPS setting (20–60). The simulation overrides `navigator.userAgent` with placeholder UA strings until the probe runs; these are the runtime's renderer test fixtures, so `detectRenderer()` needs no dev hook. UltraLight simulation replaces `requestAnimationFrame`/`cancelAnimationFrame` with a throttle at the FPS setting; QtWebEngine leaves rAF at the native rate. Changing the renderer reloads the page, while the FPS applies live. The tab shows the measured rAF rate. |
+| SignalRGB view | A scaled-up (2×), pixelated live copy of the visible 320×200, sampled at the FPS setting. If a canvas covers the region, it is sampled directly; WebGL needs `preserveDrawingBuffer: true`. Otherwise, opt-in tab capture (`getDisplayMedia` with `preferCurrentTab`) is cropped to the region. It is never restored and stops when the tab is hidden; without `navigator.mediaDevices` it reports `[srgb-effect] tab capture needs a secure context (https or localhost)`. |
+| Console | Counts `console.log`/`info`/`warn`/`error`/`debug` calls and uncaught errors/unhandled rejections, ignoring Vite's `[vite]` messages. The total shows as the toggle badge (the clean-console requirement); the badge and the tab update once per frame. |
+
+### 10.5 Testing the devtools
+
+See §11.
+
+### 10.6 Changes from the first version of §10 (Plan 2, 2026-10-15)
+
+- **Devtools modes (decided 2026-10-15).** The boolean `devtools` option is replaced by `'none' | 'minimal' | 'full' | { mode, fireChangedOnLoad }`, with a default of `'full'`. `true`/`false` are rejected, because the package is pre-release.
+  - `'minimal'` is the SignalRGB environment with nothing visible and no persistence, served from its own small bundle.
+  - `ResolvedOptions.devtools` is `{ mode, fireChangedOnLoad }`.
+- **Manifest delivery.** There is no separate `virtual:srgb-effect/manifest` module. The single virtual module `virtual:srgb-effect/devtools` inlines the config and imports the bundle, and the bundle has no Vite dependency: `import.meta.hot` is passed in.
+- **Host placement.** The drawer host is appended to `<html>`, not `<body>`.
+- **Mount timing.** The drawer mounts on `DOMContentLoaded`, after the load-time handler calls.
+- **Console tab scope.** It also counts `info`, `debug`, uncaught errors and unhandled rejections; the first version counted log/warn/error only.
+- **Renderer changes reload the page.** That way, effect code that reads the user agent at the top level sees the simulated one.
+- **Restored capture modes.** Capture modes (audio and screen) are not restored after a reload, because they need a user gesture. Failed captures fall back to silent (audio) or the previous solid/gradient source (screen) with a text error.
+- **Drawer sizing.** The drawer is resizable by drag, with the preferred size kept apart from the clamped rendered size.
+- **Endpoint details.** The status codes, CORS, the base-independent path and empty-string defaults are now specified.
+- **Specified simulation math.** The audio math, the zone scale, the capture sampling rate, the meter evaluation (no `hdr`, aspect within 3%) and the initial meter values are now specified.
 
 ## 11. Testing
 
@@ -451,8 +489,35 @@ All tests use vitest.
   - the module-scope function warning;
   - generated `.d.ts` written only on change.
 - **`runtime/`:** unit tests (jsdom) for the loop (fake timers/rAF), color conversions, zones, audio helpers, `createMeter`, and `detectRenderer` (UA fixtures from the probe).
-- **`devtools/`:** jsdom tests covering bootstrap ordering, global setting, raw-format conversion, persistence namespacing and the canvas-event relay. The UI is verified manually through the examples.
-- **CI:** build all examples as an end-to-end smoke test.
+- **`devtools/`:**
+  - jsdom unit tests (vitest) cover the logic:
+    - bootstrap ordering and the load-time calls;
+    - raw-format conversion and persistence, including stale and corrupt stored values;
+    - storage namespacing and blocked storage;
+    - handler error isolation;
+    - the canvas-event relay;
+    - audio, zone and meter math;
+    - the rAF throttle and user-agent override;
+    - the console counter;
+    - the audio and screen controllers, with fake capture sources.
+  - jsdom tests also cover each drawer tab's DOM contract.
+  - Option resolution has unit tests: each mode, the string shorthand, and the rejection of booleans and unknown modes.
+  - The plugin side has integration tests: the injected tag and its base handling, the virtual module per mode (`minimal` imports `minimal.ts`, `full` imports `index.ts`), the endpoint (204/405, encoding, base) and `'none'` (no tag, no module, 404). They also assert that the build contains no devtools code.
+  - The minimal entry has jsdom tests: defaults even with stored values, the load-time calls, the relay, and no host, user agent, rAF or console changes.
+- **End-to-end:** Playwright (`@playwright/test`, Chromium) starts the `examples/basic-2d` dev server against the built package. It asserts the following:
+  - globals exist before user code;
+  - handlers fire on load and on control change;
+  - the drawer toggles;
+  - controls change globals;
+  - values persist across a reload;
+  - the random audio mock writes `engine.audio`;
+  - `POST /canvas/event` reaches `onCanvasApiEvent`;
+  - the build output contains no devtools code;
+  - in `'minimal'` (a fixture project), globals and handlers work, values start at the defaults, `minimal.js` is loaded but never `index.js`, and there is no drawer host;
+  - in `'none'`, there are no globals and the endpoint is 404.
+
+  The suite is a separate script, `pnpm test:e2e`. It is not compatibility testing in SignalRGB's own renderers (§13).
+- **CI:** build all examples as an end-to-end smoke test. A separate `e2e` job runs `pnpm build`, `pnpm exec playwright install --with-deps chromium` and `pnpm test:e2e`.
 
 ## 12. Documentation
 
@@ -472,7 +537,7 @@ All tests use vitest.
 - Deploy-to-Effects-folder.
 - LED sampling preview with mock device layouts.
 - `create-srgb-effect` scaffolder.
-- Native UltraLight/QtWebEngine runners and Playwright compat tests.
+- Native UltraLight/QtWebEngine runners and Playwright compat tests in them.
 - Keypress/"tap effect" APIs. These are undocumented; add them if the probe discovers them.
 
 ## 14. Risks

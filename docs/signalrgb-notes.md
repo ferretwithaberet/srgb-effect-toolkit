@@ -20,7 +20,7 @@ SignalRGB has an FPS setting, from 20 to 60. Effects are not known to receive it
 - **UltraLight**: `requestAnimationFrame` follows the setting. At 30 FPS, your frame callback runs about 30 times per second.
 - **QtWebEngine**: `requestAnimationFrame` runs at 60 Hz whatever the setting, while SignalRGB samples frames at the setting's rate. At 30 FPS, your callback still runs about 60 times per second. This means some rendered frames are never sampled; that is an inference from the two rates, not a measurement.
 
-So never assume a fixed frame rate. Scale motion by elapsed time, for example with the `dt` that [`createLoop()`](runtime-api.md#createloop) passes to your frame callback. Its `maxFps` option can lower the rate at which you render, but it cannot match SignalRGB's setting, because effects are not known to receive that setting.
+The [devtools' Renderer tab](devtools.md#renderer) simulates both behaviours in `pnpm dev`. So never assume a fixed frame rate. Scale motion by elapsed time, for example with the `dt` that [`createLoop()`](runtime-api.md#createloop) passes to your frame callback. Its `maxFps` option can lower the rate at which you render, but it cannot match SignalRGB's setting, because effects are not known to receive that setting.
 
 ## The visible area
 
