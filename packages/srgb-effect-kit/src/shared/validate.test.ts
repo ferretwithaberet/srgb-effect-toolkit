@@ -53,6 +53,8 @@ describe('collectManifestIssues', () => {
       expect(issues(withProps(num('my-prop')))[0]).toMatch(
         /properties\[0\] \("my-prop"\): .*identifier/,
       );
+      expect(issues(withProps(num('class')))[0]).toMatch(/identifier/);
+      expect(issues(withProps(num('delete')))[0]).toMatch(/identifier/);
     });
 
     it('rejects duplicates', () => {
@@ -136,6 +138,7 @@ describe('collectManifestIssues', () => {
   describe('meters', () => {
     it('requires identifiers and unique names', () => {
       expect(issues(withMeters(linear({ meter: 'bad name' })))[0]).toMatch(/identifier/);
+      expect(issues(withMeters(linear({ meter: 'default' })))[0]).toMatch(/identifier/);
       expect(issues(withMeters(linear(), linear()))[0]).toMatch(/meters\[1\] \("m"\): duplicate/);
     });
 

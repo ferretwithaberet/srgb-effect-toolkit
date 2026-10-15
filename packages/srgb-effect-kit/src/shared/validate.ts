@@ -3,6 +3,55 @@ import { RESERVED_GLOBALS } from './reservedGlobals.generated';
 import type { EffectManifest, HslRanges, MeterDef, PropertyDef, Range } from './types';
 
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
+const RESERVED_WORDS = new Set([
+  'break',
+  'case',
+  'catch',
+  'class',
+  'const',
+  'continue',
+  'debugger',
+  'default',
+  'delete',
+  'do',
+  'else',
+  'enum',
+  'export',
+  'extends',
+  'false',
+  'finally',
+  'for',
+  'function',
+  'if',
+  'import',
+  'in',
+  'instanceof',
+  'new',
+  'null',
+  'return',
+  'super',
+  'switch',
+  'this',
+  'throw',
+  'true',
+  'try',
+  'typeof',
+  'var',
+  'void',
+  'while',
+  'with',
+  'yield',
+  'let',
+  'static',
+  'implements',
+  'interface',
+  'package',
+  'private',
+  'protected',
+  'public',
+  'await',
+]);
+const isIdentifier = (name: string): boolean => IDENTIFIER.test(name) && !RESERVED_WORDS.has(name);
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 const SIZE = /^\d+x\d+$/;
 const ASPECT = /^\d+(?:\.\d+)?:\d+(?:\.\d+)?$/;
@@ -38,7 +87,7 @@ function checkProperties(properties: readonly PropertyDef[], issues: string[]): 
 
   properties.forEach((p, i) => {
     const at = `properties[${i}] ("${p.property}")`;
-    if (!IDENTIFIER.test(p.property))
+    if (!isIdentifier(p.property))
       issues.push(`${at}: property must be a valid JavaScript identifier`);
     if (names.has(p.property)) issues.push(`${at}: duplicate property name`);
     names.add(p.property);
@@ -116,8 +165,7 @@ function checkMeters(meters: readonly MeterDef[], issues: string[]): void {
 
   meters.forEach((m, i) => {
     const at = `meters[${i}] ("${m.meter}")`;
-    if (!IDENTIFIER.test(m.meter))
-      issues.push(`${at}: meter must be a valid JavaScript identifier`);
+    if (!isIdentifier(m.meter)) issues.push(`${at}: meter must be a valid JavaScript identifier`);
     if (names.has(m.meter)) issues.push(`${at}: duplicate meter name`);
     names.add(m.meter);
 
