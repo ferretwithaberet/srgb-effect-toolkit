@@ -123,7 +123,9 @@ describe('startDevtools', () => {
     start();
     expect(document.querySelector('srgb-effect-devtools')).toBeNull();
     document.dispatchEvent(new Event('DOMContentLoaded'));
-    expect(document.querySelector('srgb-effect-devtools')?.shadowRoot).not.toBeNull();
+    const host = document.querySelector('srgb-effect-devtools');
+    expect(host).not.toBeNull();
+    expect(host!.shadowRoot).toBeInstanceOf(ShadowRoot);
   });
 
   it('returns the existing context when started twice', () => {

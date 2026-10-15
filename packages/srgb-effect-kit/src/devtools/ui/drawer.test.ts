@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MANIFEST, resetDevtoolsWindow } from '../../../test/helpers/devtools';
 import type { DevtoolsContext } from '../context';
 import { createStorage } from '../storage';
@@ -29,6 +29,10 @@ const find = (root: ShadowRoot, name: string) =>
   root.querySelector<HTMLElement>(`[data-srgb-devtools="${name}"]`)!;
 
 beforeEach(() => resetDevtoolsWindow());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe('mountDrawer', () => {
   it('mounts a closed drawer in an open shadow root on <html>', () => {
@@ -121,6 +125,123 @@ describe('mountDrawer', () => {
     expect(find(drawer.root, 'badge').textContent).toBe('99+');
     drawer.setBadge(0);
     expect(find(drawer.root, 'badge').hidden).toBe(true);
+  });
+});
+
+describe('drawer hardening', () => {
+  const pointer = (type: string, init: { clientX?: number; clientY?: number } = {}) =>
+    Object.assign(new Event(type, { bubbles: true, cancelable: true }), {
+      pointerId: 1,
+      clientX: 0,
+      clientY: 0,
+      ...init,
+    });
+  const frames: FrameRequestCallback[] = [];
+  const runFrames = () => frames.splice(0).forEach((callback) => callback(0));
+  const open = () => {
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...DEFAULT_DRAWER_STATE, open: true }));
+    const drawer = mountDrawer(context(), []);
+    const resize = find(drawer.root, 'resize');
+    const writes = vi.spyOn(Storage.prototype, 'setItem');
+    return { drawer, resize, writes };
+  };
+
+  it('stops resizing after pointercancel', () => {
+    const { drawer, resize } = open();
+    resize.dispatchEvent(pointer('pointerdown'));
+    resize.dispatchEvent(pointer('pointermove', { clientY: window.innerHeight - 200 }));
+    runFrames();
+    expect(drawer.state.size).toBe(200);
+    resize.dispatchEvent(pointer('pointercancel'));
+    resize.dispatchEvent(pointer('pointermove', { clientY: window.innerHeight - 300 }));
+    runFrames();
+    expect(drawer.state.size).toBe(200);
+  });
+
+  it('does not stack handlers across pointerdowns', () => {
+    const { resize, writes } = open();
+    resize.dispatchEvent(pointer('pointerdown'));
+    resize.dispatchEvent(pointer('pointerdown'));
+    resize.dispatchEvent(pointer('pointerup'));
+    expect(writes).toHaveBeenCalledTimes(2);
+  });
+
+  it('batches drag updates per frame and persists once on drag end', () => {
+    const { drawer, resize, writes } = open();
+    resize.dispatchEvent(pointer('pointerdown'));
+    for (const size of [200, 220, 240])
+      resize.dispatchEvent(pointer('pointermove', { clientY: window.innerHeight - size }));
+    expect(frames).toHaveLength(1);
+    runFrames();
+    expect(drawer.state.size).toBe(240);
+    expect(writes).not.toHaveBeenCalled();
+    resize.dispatchEvent(pointer('pointerup'));
+    expect(writes).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!)).toMatchObject({ size: 240 });
+  });
+
+  it('clamps to a small window without overwriting the saved size', () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ ...DEFAULT_DRAWER_STATE, size: 600, open: true }),
+    );
+    const original = window.innerHeight;
+    Object.defineProperty(window, 'innerHeight', { value: 400, configurable: true });
+    try {
+      const drawer = mountDrawer(context(), []);
+      const writes = vi.spyOn(Storage.prototype, 'setItem');
+      window.dispatchEvent(new Event('resize'));
+      expect(drawer.state.size).toBe(360);
+      expect(writes).not.toHaveBeenCalled();
+      expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!)).toMatchObject({ size: 600 });
+      Object.defineProperty(window, 'innerHeight', { value: 1000, configurable: true });
+      window.dispatchEvent(new Event('resize'));
+      expect(drawer.state.size).toBe(600);
+    } finally {
+      Object.defineProperty(window, 'innerHeight', { value: original, configurable: true });
+    }
+  });
+
+  it('survives a throwing tab and stays closable', () => {
+    const reportError = vi.fn();
+    vi.stubGlobal('reportError', reportError);
+    const broken: TabDefinition = {
+      id: 'broken',
+      label: 'Broken',
+      create: () => {
+        throw new Error('boom');
+      },
+    };
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ ...DEFAULT_DRAWER_STATE, open: true, tab: 'broken' }),
+    );
+    const drawer = mountDrawer(context(), [broken]);
+    expect(drawer.host.isConnected).toBe(true);
+    expect(find(drawer.root, 'content').querySelector('.error')?.textContent).toContain('boom');
+    expect(reportError).toHaveBeenCalledOnce();
+    find(drawer.root, 'close').click();
+    expect(drawer.state.open).toBe(false);
+  });
+
+  it('isolates throwing show and hide hooks', () => {
+    const reportError = vi.fn();
+    vi.stubGlobal('reportError', reportError);
+    const throwing = () => {
+      throw new Error('hook');
+    };
+    const drawer = mountDrawer(context(), [
+      tab('a', { hide: throwing }),
+      tab('b', { show: throwing }),
+    ]);
+    drawer.open();
+    drawer.select('b');
+    expect(drawer.state.tab).toBe('b');
+    expect(reportError).toHaveBeenCalledTimes(2);
   });
 });
 

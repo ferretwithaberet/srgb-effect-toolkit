@@ -1,5 +1,6 @@
 import type { DevtoolsContext } from '../context';
-import { h } from './dom';
+import { reportError } from '../lifecycle';
+import { h, rafBatch } from './dom';
 import { createAreaOverlay } from './overlay';
 import { DEVTOOLS_CSS } from './styles';
 
@@ -151,13 +152,36 @@ export function mountDrawer(
   const buttons = new Map<string, HTMLButtonElement>();
   const instances = new Map<string, TabInstance>();
   let visible: TabInstance | undefined;
+  // The size the user chose; `state.size` is that, clamped to the current viewport.
+  let preferredSize = state.size;
+
+  // A failing tab must not take the drawer down: report it and keep going.
+  const guard = (fn: (() => void) | undefined) => {
+    try {
+      fn?.();
+    } catch (error) {
+      reportError(win, error);
+    }
+  };
+  const errorInstance = (error: unknown): TabInstance => ({
+    element: h(
+      'div',
+      { class: 'rows' },
+      h('div', { class: 'row error' }, `This tab failed to load: ${String(error)}`),
+    ),
+  });
 
   const instanceFor = (id: string): TabInstance | undefined => {
     let instance = instances.get(id);
     if (instance) return instance;
     const definition = tabs.find((tab) => tab.id === id);
     if (!definition) return undefined;
-    instance = definition.create(context);
+    try {
+      instance = definition.create(context);
+    } catch (error) {
+      reportError(win, error);
+      instance = errorInstance(error);
+    }
     instance.element.hidden = true;
     instances.set(id, instance);
     content.append(instance.element);
@@ -179,19 +203,23 @@ export function mountDrawer(
     if (next === visible) return;
     if (visible) {
       visible.element.hidden = true;
-      visible.hide?.();
+      guard(() => visible?.hide?.());
     }
     if (next) {
       next.element.hidden = false;
-      next.show?.();
+      guard(() => next.show?.());
     }
     visible = next;
   };
 
-  const update = (patch: Partial<DrawerState>) => {
+  const update = (patch: Partial<DrawerState>, persist = true) => {
+    if (patch.size !== undefined) preferredSize = patch.size;
     const next = { ...state, ...patch };
-    state = { ...next, size: clampDrawerSize(next.size, next.dock, viewport()) };
-    storage.write(STORAGE_KEY, state);
+    if (patch.size !== undefined || patch.dock !== undefined) {
+      preferredSize = clampDrawerSize(preferredSize, next.dock, viewport());
+    }
+    state = { ...next, size: clampDrawerSize(preferredSize, next.dock, viewport()) };
+    if (persist) storage.write(STORAGE_KEY, { ...state, size: preferredSize });
     render();
   };
 
@@ -213,22 +241,38 @@ export function mountDrawer(
   );
   markerButton.addEventListener('click', () => update({ marker: !state.marker }));
   dimButton.addEventListener('click', () => update({ dim: !state.dim }));
+  let endDrag: (() => void) | undefined;
   resize.addEventListener('pointerdown', (event) => {
     event.preventDefault();
+    endDrag?.();
     resize.setPointerCapture?.(event.pointerId);
-    const onMove = (move: PointerEvent) =>
-      update({
-        size:
-          state.dock === 'bottom' ? win.innerHeight - move.clientY : win.innerWidth - move.clientX,
-      });
-    const onUp = () => {
-      resize.removeEventListener('pointermove', onMove);
-      resize.removeEventListener('pointerup', onUp);
+    let pending: number | undefined;
+    const apply = () => {
+      if (pending === undefined) return;
+      const size = pending;
+      pending = undefined;
+      update({ size }, false);
     };
+    const schedule = rafBatch(win.requestAnimationFrame.bind(win), apply);
+    const onMove = (move: PointerEvent) => {
+      pending =
+        state.dock === 'bottom' ? win.innerHeight - move.clientY : win.innerWidth - move.clientX;
+      schedule();
+    };
+    const events = ['pointerup', 'pointercancel', 'lostpointercapture'] as const;
+    const finish = () => {
+      resize.removeEventListener('pointermove', onMove);
+      for (const name of events) resize.removeEventListener(name, finish);
+      endDrag = undefined;
+      apply();
+      update({}); // persist the final size once
+    };
+    endDrag = finish;
     resize.addEventListener('pointermove', onMove);
-    resize.addEventListener('pointerup', onUp);
+    for (const name of events) resize.addEventListener(name, finish);
   });
-  win.addEventListener('resize', () => update({}));
+  // Clamp what is rendered to the viewport without overwriting the saved size.
+  win.addEventListener('resize', () => update({}, false));
 
   state = { ...state, size: clampDrawerSize(state.size, state.dock, viewport()) };
   render();
