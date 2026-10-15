@@ -31,7 +31,7 @@ The probe keeps its `console.log` calls (`dropConsole: false`), so unlike a norm
 
 ## Where to read the console
 
-Open SignalRGB's **Console** panel. Every probe message starts with `[probe]` and is a single line: `[probe] <section> <json>`. Copy every line that starts with `[probe]`, in order.
+Open SignalRGB's **Console** panel. Every probe message starts with `[probe]` and is a single line: `[probe] <section> <json>`. Copy every line that starts with `[probe]`, in order. If the Console panel won't let you copy, take screenshots instead and say so.
 
 Long messages, such as `REPORT`, are split so the console can't truncate them: they arrive as `[probe] <section>#1/3 <chunk>`, `[probe] <section>#2/3 <chunk>` and so on. A chunked line is not valid JSON on its own; only all its chunks joined in order are. Copy every chunk.
 
@@ -61,26 +61,55 @@ What to expect in the console, in order:
 
 A section that fails logs `[probe] <section>-error {"message":…,"stack":…}` instead; send those too.
 
+Ignore one thing that looks like a finding: `handlersBefore` in `properties` and the seven `on…Changed`/`onCanvasApiEvent` names in `globals.injected` show `undefined` because the toolkit's own prelude creates them before the probe runs.
+
 ## Run checklist
 
 Every run starts the same way: **select the effect, wait at least 8 s, then copy all `[probe]` lines.** If the run lists actions, do them first and copy at the end, so the copy includes their lines. Clear the console between runs if SignalRGB lets you, so each copy holds one run.
 
 The renderer is chosen in SignalRGB's settings (the renderer option). The exact menu path isn't known yet, so please note where you found it. The FPS setting goes from 20 to 60.
 
-| ID  | Renderer    | FPS | Effect file          | Audio         | Screen                     | Actions after the first 8 s                                                                                                                                                                                                                                                                                     |
-| --- | ----------- | --- | -------------------- | ------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| U1  | UltraLight  | 60  | `probe.html`         | music playing | a colourful window visible | 1. Change every control once, in this order: pNumber, pHue, pBool, pColor, pText (type 3 characters), pList. 2. In a Windows terminal, run `curl -X POST "http://localhost:16034/canvas/event?sender=probe&event=hello"` (in PowerShell 5.1, type `curl.exe`). 3. Wait 35 s for the second `REPORT`, then copy. |
-| U2  | UltraLight  | 30  | `probe.html`         | any           | any                        | Reselect the effect (or restart SignalRGB) after changing the FPS, then wait. Timing only.                                                                                                                                                                                                                      |
-| U3  | UltraLight  | 20  | `probe.html`         | any           | any                        | As U2. Timing only.                                                                                                                                                                                                                                                                                             |
-| U4  | UltraLight  | 60  | `probe.html`         | **silence**   | any                        | No actions. Records the silent audio ranges.                                                                                                                                                                                                                                                                    |
-| U5  | UltraLight  | 60  | `probe-classic.html` | any           | any                        | No actions. Checks the classic build runs; copy its lines.                                                                                                                                                                                                                                                      |
-| U6  | UltraLight  | 60  | `probe.html`         | any           | any                        | Restart SignalRGB, then select `probe.html` as the first effect loaded after the restart. In `features-storage`, `previous` is what the last load wrote: if its `count`, `bootId` and `lastBoot` are there, storage survived the restart.                                                                       |
-| Q1  | QtWebEngine | 60  | `probe.html`         | music playing | a colourful window visible | As U1.                                                                                                                                                                                                                                                                                                          |
-| Q2  | QtWebEngine | 30  | `probe.html`         | any           | any                        | As U2.                                                                                                                                                                                                                                                                                                          |
-| Q3  | QtWebEngine | 20  | `probe.html`         | any           | any                        | As U3.                                                                                                                                                                                                                                                                                                          |
-| Q4  | QtWebEngine | 60  | `probe.html`         | **silence**   | any                        | As U4.                                                                                                                                                                                                                                                                                                          |
-| Q5  | QtWebEngine | 60  | `probe-classic.html` | any           | any                        | As U5.                                                                                                                                                                                                                                                                                                          |
-| Q6  | QtWebEngine | 60  | `probe.html`         | any           | any                        | As U6.                                                                                                                                                                                                                                                                                                          |
+| ID  | Renderer    | FPS | Effect file          | Audio         | Screen          | Actions after the first 8 s                                                                                                                                                                                                               |
+| --- | ----------- | --- | -------------------- | ------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| U1  | UltraLight  | 60  | `probe.html`         | music playing | set up as below | Follow [the U1 and Q1 steps](#u1-and-q1-steps).                                                                                                                                                                                           |
+| U2  | UltraLight  | 30  | `probe.html`         | any           | any             | Reselect the effect (or restart SignalRGB) after changing the FPS, then wait. Timing only.                                                                                                                                                |
+| U3  | UltraLight  | 20  | `probe.html`         | any           | any             | As U2. Timing only.                                                                                                                                                                                                                       |
+| U4  | UltraLight  | 60  | `probe.html`         | **silence**   | any             | No actions. Records the silent audio ranges.                                                                                                                                                                                              |
+| U5  | UltraLight  | 60  | `probe-classic.html` | any           | any             | No actions. Checks the classic build runs; copy its lines.                                                                                                                                                                                |
+| U6  | UltraLight  | 60  | `probe.html`         | any           | any             | Restart SignalRGB, then select `probe.html` as the first effect loaded after the restart. In `features-storage`, `previous` is what the last load wrote: if its `count`, `bootId` and `lastBoot` are there, storage survived the restart. |
+| Q1  | QtWebEngine | 60  | `probe.html`         | music playing | set up as below | As U1.                                                                                                                                                                                                                                    |
+| Q2  | QtWebEngine | 30  | `probe.html`         | any           | any             | As U2.                                                                                                                                                                                                                                    |
+| Q3  | QtWebEngine | 20  | `probe.html`         | any           | any             | As U3.                                                                                                                                                                                                                                    |
+| Q4  | QtWebEngine | 60  | `probe.html`         | **silence**   | any             | As U4.                                                                                                                                                                                                                                    |
+| Q5  | QtWebEngine | 60  | `probe-classic.html` | any           | any             | As U5.                                                                                                                                                                                                                                    |
+| Q6  | QtWebEngine | 60  | `probe.html`         | any           | any             | As U6.                                                                                                                                                                                                                                    |
+
+### U1 and Q1 steps
+
+These runs exercise the controls, the canvas API and the four screen meters. Positions are fractions of your main screen, measured from its top-left corner.
+
+1. Before selecting the effect, arrange the screen so each meter has something to read:
+   - **mArea** watches a box in the middle of the screen (from 40% to 60% across and down). Put a colourful, bright window over it, such as an image or a video.
+   - **mLinear** watches a horizontal strip near the bottom left (90% down, from 5% to 25% across). If you can, put something bright green there.
+   - **mText** watches the top middle (from 35% to 65% across, 5% to 15% down). Show the word `VICTORY` there in large text, for example in Notepad with a big font.
+   - **mNumber** watches a small box at the bottom right (from 85% to 95% across, 90% to 95% down). Show a number such as `42` there in large text.
+2. Start music, select the effect and wait at least 8 s. The meters are sampled during the first 5 s, so keep the screen still until then.
+3. Change every control once, in this order: pNumber, pHue, pBool, pColor, pText (type 3 characters), pList.
+4. In a Windows terminal (Command Prompt or PowerShell), send a canvas API event:
+
+   ```text
+   curl.exe -X POST "http://localhost:16034/canvas/event?sender=probe&event=hello"
+   ```
+
+   If `curl.exe` is missing, use PowerShell instead:
+
+   ```powershell
+   Invoke-WebRequest -Method Post -Uri "http://localhost:16034/canvas/event?sender=probe&event=hello"
+   ```
+
+   Expect a `[probe] canvas-event` line in the console.
+
+5. Wait 35 s for the second `REPORT`, then copy all `[probe]` lines.
 
 ## What to send back
 
@@ -89,6 +118,9 @@ For each run, send one block like this:
 ```text
 Run: U1
 SignalRGB version: 2.x.y
+Windows version: Windows 11 23H2 (once is enough)
+GPU: model and driver version (once is enough)
+SignalRGB preview/canvas size: as shown in SignalRGB, if it shows one
 Renderer: UltraLight
 FPS setting: 60
 Audio: music playing (or: silence)
