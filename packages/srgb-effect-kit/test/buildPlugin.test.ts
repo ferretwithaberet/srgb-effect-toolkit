@@ -138,4 +138,34 @@ describe('srgbEffect build', () => {
     });
     expect([...files.keys()]).toEqual(['custom.html']);
   });
+  it('rejects external side-effect imports in classic scripts', async () => {
+    const main = 'import "https://cdn.example/x.js"; document.title = "x";';
+    await expect(buildOnly(project(main))).rejects.toThrow(
+      /\[srgb-effect\] classic scripts cannot import external modules/,
+    );
+  });
+
+  it('rejects external named imports in classic scripts', async () => {
+    const main =
+      'import { thing } from "https://cdn.example/x.js"; document.title = String(thing);';
+    await expect(buildOnly(project(main))).rejects.toThrow(
+      /\[srgb-effect\] classic scripts cannot import external modules/,
+    );
+  });
+
+  it('rejects top-level await in classic scripts', async () => {
+    const main = 'await Promise.resolve(); document.title = "x";';
+    await expect(buildOnly(project(main))).rejects.toThrow(/\[srgb-effect\] top-level await/);
+  });
+
+  it('allows top-level await in module scripts', async () => {
+    const main = 'await Promise.resolve(); document.title = "x";';
+    const { html } = await buildOnly(project(main), { script: 'module' });
+    expect(html).toContain('<script type="module">');
+  });
+
+  it('keeps build warnings clean', async () => {
+    const { warnings } = await buildOnly(project('document.title = "x";'));
+    expect(warnings).toEqual([]);
+  });
 });

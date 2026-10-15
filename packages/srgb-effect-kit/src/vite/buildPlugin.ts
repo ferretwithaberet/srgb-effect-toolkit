@@ -37,9 +37,14 @@ export function buildPlugin(options: ResolvedOptions): Plugin {
     },
 
     onLog(_level, log) {
+      if (options.script === 'classic' && log.code === 'MISSING_GLOBAL_NAME') {
+        this.error(
+          `[srgb-effect] classic scripts cannot import external modules (${log.message}). Bundle the dependency or set script: 'module'.`,
+        );
+      }
       if (log.code !== 'EMPTY_IMPORT_META') return;
-      // Vite's own helpers (virtual \0 modules) reference import.meta in dead code paths; user code must not.
-      if (options.script === 'classic' && log.id && !log.id.startsWith('\0')) {
+      // Vite's own helpers (\0vite/ virtual modules) reference import.meta in dead code paths; other code must not.
+      if (options.script === 'classic' && !log.id?.startsWith('\0vite/')) {
         this.error(
           `[srgb-effect] ${log.id} uses import.meta, which is unavailable in classic scripts. Remove it (import.meta.env is fine) or set script: 'module'.`,
         );
@@ -47,7 +52,28 @@ export function buildPlugin(options: ResolvedOptions): Plugin {
       return false;
     },
 
+    buildEnd(error) {
+      if (options.script === 'classic' && error && /top-level await/i.test(error.message)) {
+        this.error(
+          "[srgb-effect] top-level await is not supported in classic scripts. Wrap it in an async function or set script: 'module'.",
+        );
+      }
+    },
+
     generateBundle(_outputOptions, bundle) {
+      if (options.script === 'classic') {
+        const external = new Set<string>();
+        for (const file of Object.values(bundle)) {
+          if (file.type !== 'chunk') continue;
+          for (const id of file.imports) external.add(id);
+          for (const id of file.dynamicImports) if (!(id in bundle)) external.add(id);
+        }
+        if (external.size > 0) {
+          this.error(
+            `[srgb-effect] classic scripts cannot import external modules (${[...external].join(', ')}). Bundle the dependency or set script: 'module'.`,
+          );
+        }
+      }
       const htmlFiles = Object.values(bundle).filter(
         (file): file is Rolldown.OutputAsset =>
           file.type === 'asset' && file.fileName.endsWith('.html'),
