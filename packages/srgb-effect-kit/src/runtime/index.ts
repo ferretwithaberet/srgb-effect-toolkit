@@ -19,3 +19,8 @@ export {
 export type { Hsl, Rgb } from './color';
 export { createLoop } from './loop';
 export type { Loop, LoopInfo, LoopOptions } from './loop';
+export { FREQUENCY_BINS, SILENCE_SUM_THRESHOLD, getFrequencies, isSilent } from './audio';
+export { createMeter } from './meter';
+export type { Meter } from './meter';
+export { ZONE_COLUMNS, ZONE_ROWS, getZone, getZones } from './zones';
+export type { ZoneColor } from './zones';
