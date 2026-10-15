@@ -130,7 +130,7 @@ The plugin also writes `src/srgb-effect.d.ts` (the `typesFile` option) whenever 
 
 Every message from the plugin starts with `[srgb-effect]`. [Configuration](configuration.md#validation) lists the option validation errors, which stop Vite before it builds anything.
 
-### Hand-written `<title>` or SignalRGB `<meta>` in `index.html`
+### Hand-written `<title>` or SignalRGB `<meta>` in the HTML entry
 
 ```text
 [srgb-effect] index.html must not contain <title>: these are generated from the srgbEffect() options.
@@ -140,7 +140,7 @@ The message lists everything it found, separated by commas: `<title>`, `<meta pr
 
 Open Graph and similar tags, such as `<meta property="og:title" …>`, are reported as `<meta property> (Open Graph style meta tags collide with SignalRGB controls)`, because SignalRGB reads every `<meta property>` as a control.
 
-Fix: delete these tags from `index.html` and set `title`, `description`, `publisher`, `properties` and `meters` in your config instead. Anything inside HTML comments or inside inline `<svg>`, `<script>`, `<template>` and `<style>` elements is ignored, so an SVG's own `<title>` is fine. Other meta tags, such as `<meta charset>` and `<meta name="viewport">`, are fine.
+The message names your actual entry file, such as `butterchurn-srgb.html` when you use a custom entry. Fix: delete these tags from that file and set `title`, `description`, `publisher`, `properties` and `meters` in your config instead. Anything inside HTML comments or inside inline `<svg>`, `<script>`, `<template>` and `<style>` elements is ignored, so an SVG's own `<title>` is fine. Other meta tags, such as `<meta charset>` and `<meta name="viewport">`, are fine.
 
 ### External imports in classic scripts
 
@@ -188,7 +188,7 @@ Something in your code made the bundler emit a separate file, for example a Web 
 [srgb-effect] expected exactly one HTML entry, found 0
 ```
 
-The build produced no HTML file, for example because `build.rolldownOptions.input` points at a script instead of `index.html`. Fix: remove the custom input and keep a single `index.html` in the project root.
+The build produced no HTML file, for example because `build.rolldownOptions.input` points at a script instead of an HTML file. Fix: make the input a single `.html` file, or remove the custom input and keep a single `index.html` in the project root.
 
 With several HTML inputs, the bundler fails before the plugin's check, because code splitting is off:
 

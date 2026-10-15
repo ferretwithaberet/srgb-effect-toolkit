@@ -69,4 +69,18 @@ describe('srgbEffect core', () => {
       /index\.html must not contain <title>/,
     );
   });
+
+  it('names the actual entry file in the hand-written tags error', async () => {
+    const root = createFixture({
+      'effect.html':
+        '<head><title>Manual</title></head><body><script type="module" src="/main.js"></script></body>',
+      'main.js': 'document.body.dataset.x = "1";',
+    });
+    await expect(
+      buildFixture(root, {
+        plugins: [srgbEffect(options)],
+        build: { rolldownOptions: { input: path.join(root, 'effect.html') } },
+      }),
+    ).rejects.toThrow(/\[srgb-effect\] effect\.html must not contain <title>/);
+  });
 });
