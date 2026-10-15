@@ -144,6 +144,22 @@ describe('createPropertyController', () => {
     expect(window.reportError).toHaveBeenCalledWith(error);
   });
 
+  it('isolates a throwing subscriber: the handler and later subscribers still run', () => {
+    const properties = create();
+    const error = new Error('subscriber failed');
+    const handler = vi.fn();
+    globals.onSpeedChanged = handler;
+    const later = vi.fn();
+    properties.subscribe(() => {
+      throw error;
+    });
+    properties.subscribe(later);
+    expect(properties.set('speed', 3)).toBe(true);
+    expect(later).toHaveBeenCalledOnce();
+    expect(handler).toHaveBeenCalledOnce();
+    expect(window.reportError).toHaveBeenCalledWith(error);
+  });
+
   it('resets to defaults, firing only for values that changed', () => {
     const properties = create();
     properties.set('speed', 10);

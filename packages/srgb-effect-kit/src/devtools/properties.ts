@@ -1,6 +1,6 @@
 import { handlerName, type PropertyDef } from '../shared';
 import { globalsOf, type DevtoolsWindow } from './context';
-import { callGlobal } from './lifecycle';
+import { callGlobal, reportError } from './lifecycle';
 import { isRecord, type DevtoolsStorage } from './storage';
 
 /**
@@ -95,7 +95,13 @@ export function createPropertyController(
     values.set(p.property, value);
     globals[p.property] = value;
     storage.write(STORAGE_KEY, Object.fromEntries(values));
-    for (const listener of listeners) listener(p.property, value);
+    for (const listener of listeners) {
+      try {
+        listener(p.property, value);
+      } catch (error) {
+        reportError(win, error);
+      }
+    }
     callGlobal(win, handlerName(p.property));
   };
 

@@ -1,6 +1,6 @@
 import type { CanvasApiEvent } from '../runtime/globals';
 import type { DevtoolsWindow } from './context';
-import { callGlobal } from './lifecycle';
+import { callGlobal, reportError } from './lifecycle';
 
 /** Where a canvas API event came from: the drawer's form or `POST /canvas/event` on the dev server. */
 export type CanvasEventSource = 'drawer' | 'http';
@@ -50,7 +50,13 @@ export function createCanvasApi(
         0,
         CANVAS_HISTORY_LIMIT,
       );
-      for (const listener of listeners) listener(history);
+      for (const listener of listeners) {
+        try {
+          listener(history);
+        } catch (error) {
+          reportError(win, error);
+        }
+      }
       return handled;
     },
     subscribe(listener) {

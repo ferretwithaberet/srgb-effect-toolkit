@@ -51,6 +51,19 @@ describe('createCanvasApi', () => {
     expect(window.reportError).toHaveBeenCalledWith(error);
   });
 
+  it('isolates a throwing subscriber so later ones still run', () => {
+    const api = createCanvasApi(window);
+    const error = new Error('subscriber failed');
+    const later = vi.fn();
+    api.subscribe(() => {
+      throw error;
+    });
+    api.subscribe(later);
+    expect(api.dispatch({ sender: 's', event: 'e' }, 'drawer')).toBe(false);
+    expect(later).toHaveBeenCalledOnce();
+    expect(window.reportError).toHaveBeenCalledWith(error);
+  });
+
   it('keeps the newest events first, up to the limit', () => {
     const api = createCanvasApi(window);
     for (let i = 0; i < CANVAS_HISTORY_LIMIT + 5; i += 1) {
