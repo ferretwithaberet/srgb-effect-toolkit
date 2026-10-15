@@ -273,7 +273,7 @@ describe('openAudioCapture', () => {
   it('reports a missing audio track and stops all tracks', async () => {
     const tracks = [track('video')];
     await expect(openAudioCapture('system', () => {}, fakeMedia(tracks))).rejects.toThrow(
-      /No audio was shared/,
+      /^\[srgb-effect\] No audio was shared/,
     );
     expect(tracks[0]!.stop).toHaveBeenCalledOnce();
   });
@@ -286,6 +286,52 @@ describe('openAudioCapture', () => {
     );
     for (const t of tracks) expect(t.stop).toHaveBeenCalledOnce();
     expect(contexts[0]!.close).toHaveBeenCalledOnce();
+  });
+
+  it('needs a secure context: reports missing mediaDevices or methods with a prefix', async () => {
+    await expect(openAudioCapture('microphone', () => {}, undefined)).rejects.toThrow(
+      '[srgb-effect] audio capture needs a secure context (https or localhost)',
+    );
+    const withoutDisplay = { getUserMedia: vi.fn() } as unknown as MediaDevices;
+    await expect(openAudioCapture('system', () => {}, withoutDisplay)).rejects.toThrow(
+      '[srgb-effect] audio capture needs a secure context (https or localhost)',
+    );
+    const withoutUser = { getDisplayMedia: vi.fn() } as unknown as MediaDevices;
+    await expect(openAudioCapture('microphone', () => {}, withoutUser)).rejects.toThrow(
+      '[srgb-effect] audio capture needs a secure context (https or localhost)',
+    );
+  });
+
+  it('stops all tracks when the AudioContext constructor throws', async () => {
+    vi.stubGlobal(
+      'AudioContext',
+      class {
+        constructor() {
+          throw new Error('no audio context');
+        }
+      },
+    );
+    const tracks = [track('audio'), track('video')];
+    await expect(openAudioCapture('system', () => {}, fakeMedia(tracks))).rejects.toThrow(
+      'no audio context',
+    );
+    for (const t of tracks) expect(t.stop).toHaveBeenCalledOnce();
+  });
+
+  it('falls back to silent with the secure-context error in the controller', async () => {
+    const { audio } = createEngineMock();
+    const { raf } = fakeRaf();
+    const controller = createAudioController(
+      audio,
+      createStorage('Audio Test', () => localStorage),
+      raf,
+      (kind, onEnded) => openAudioCapture(kind, onEnded, undefined),
+    );
+    await controller.setMode('microphone');
+    expect(controller.mode).toBe('silent');
+    expect(controller.error).toBe(
+      '[srgb-effect] audio capture needs a secure context (https or localhost)',
+    );
   });
 
   it('calls onEnded once when any track ends', async () => {

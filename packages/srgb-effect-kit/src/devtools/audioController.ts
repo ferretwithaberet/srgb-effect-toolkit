@@ -150,8 +150,12 @@ export function createAudioController(
 export async function openAudioCapture(
   kind: 'microphone' | 'system',
   onEnded: () => void,
-  media: MediaDevices = navigator.mediaDevices,
+  media: MediaDevices | undefined = navigator.mediaDevices,
 ): Promise<AudioSource> {
+  const method = kind === 'microphone' ? 'getUserMedia' : 'getDisplayMedia';
+  if (typeof media?.[method] !== 'function') {
+    throw new Error('[srgb-effect] audio capture needs a secure context (https or localhost)');
+  }
   const stream =
     kind === 'microphone'
       ? await media.getUserMedia({
@@ -164,13 +168,15 @@ export async function openAudioCapture(
   const [track] = stream.getAudioTracks();
   if (!track) {
     stopStream();
-    throw new Error('No audio was shared. Pick a tab or screen and tick "Share audio".');
+    throw new Error(
+      '[srgb-effect] No audio was shared. Pick a tab or screen and tick "Share audio".',
+    );
   }
 
   const tracks = stream.getTracks();
-  const context = new AudioContext();
+  let context: AudioContext | undefined;
   const closeContext = () => {
-    if (context.state !== 'closed') void context.close().catch(() => {});
+    if (context && context.state !== 'closed') void context.close().catch(() => {});
   };
   const nodes: AudioNode[] = [];
   let endedOnce = false;
@@ -193,6 +199,7 @@ export async function openAudioCapture(
   };
 
   try {
+    context = new AudioContext();
     void context.resume();
     const input = context.createMediaStreamSource(new MediaStream([track]));
     const splitter = context.createChannelSplitter(2);
