@@ -1,4 +1,5 @@
 import type { DevtoolsConfig } from '../shared';
+import type { AudioController } from './audioController';
 import type { CanvasApiController } from './canvasApi';
 import type { ConsoleCounter } from './consoleCounter';
 import type { MockEngine } from './engine';
@@ -44,6 +45,7 @@ export interface DevtoolsContext extends SimulationContext {
   readonly raf: FrameScheduler;
   readonly renderer: RendererController;
   readonly consoleCounter: ConsoleCounter;
+  readonly audio: AudioController;
 }
 
 /** The window as a bag of globals, for names only known at runtime (property globals, handlers). */

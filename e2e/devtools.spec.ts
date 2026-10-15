@@ -158,3 +158,13 @@ test('keeps property values and drawer state across reloads', async ({ page }) =
   await page.locator('[data-srgb-devtools="reset-properties"]').click();
   expect(await page.evaluate(() => window.speed)).toBe(25);
 });
+
+test('the random audio mock writes engine.audio', async ({ page }) => {
+  await openEffect(page);
+  expect(await page.evaluate(() => window.engine.audio.level)).toBe(-100);
+  await page.locator('[data-srgb-devtools="toggle"]').click();
+  await page.locator('[data-srgb-devtools-tab="audio"]').click();
+  await page.locator('[data-srgb-audio-mode="random"]').click();
+  await expect.poll(() => page.evaluate(() => window.engine.audio.level)).toBeGreaterThan(-100);
+  expect(await page.evaluate(() => window.engine.audio.freq.length)).toBe(200);
+});
