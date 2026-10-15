@@ -15,6 +15,8 @@ const EXAMPLE = path.resolve(import.meta.dirname, '../examples/basic-2d');
 test('defines SignalRGB globals before the effect code runs', async ({ page }) => {
   const errors = collectPageErrors(page);
   await probeGlobalsAtUserStart(page, ['speed', 'baseHue', 'rainbow', 'mode', 'engine']);
+  const requests: string[] = [];
+  page.on('request', (request) => requests.push(request.url()));
   await openEffect(page);
   expect(await page.evaluate(() => window.__atUserStart)).toEqual({
     speed: 'number',
@@ -24,6 +26,15 @@ test('defines SignalRGB globals before the effect code runs', async ({ page }) =
     engine: 'object',
     onSpeedChanged: true,
   });
+  // Raw values: the defaults declared by basic-2d (a boolean is the raw string '1').
+  expect(await page.evaluate(() => [window.speed, window.rainbow, window.mode])).toEqual([
+    25,
+    '1',
+    'Wave',
+  ]);
+  // Full mode loads the full bundle, never the minimal one (mirror of the 'minimal' test).
+  expect(requests.some((url) => url.endsWith('/devtools/index.js'))).toBe(true);
+  expect(requests.some((url) => url.endsWith('/devtools/minimal.js'))).toBe(false);
   expect(errors).toEqual([]);
 });
 
@@ -36,7 +47,8 @@ test('calls the assigned change handlers once on load', async ({ page }) => {
   ]);
   await openEffect(page);
   // basic-2d assigns only onBaseHueChanged.
-  await expect.poll(() => page.evaluate(() => window.__handlerCalls)).toEqual(['onBaseHueChanged']);
+  // Load-time calls finish before the load event that openEffect waits for: read once, exactly.
+  expect(await page.evaluate(() => window.__handlerCalls)).toEqual(['onBaseHueChanged']);
 });
 
 test('relays POST /canvas/event into onCanvasApiEvent', async ({ page }) => {
