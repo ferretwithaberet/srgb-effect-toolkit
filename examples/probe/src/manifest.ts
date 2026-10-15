@@ -7,6 +7,8 @@ import type { MeterDef, PropertyDef } from 'srgb-effect-kit/vite';
 export const properties = [
   { property: 'pNumber', type: 'number', label: 'Number', min: 0, max: 100, default: 50 },
   { property: 'pHue', type: 'hue', label: 'Hue', default: 200 },
+  // A second hue, to check whether every hue default arrives as 0 (pHue's 200 did).
+  { property: 'pHue2', type: 'hue', label: 'Hue 2', default: 120 },
   { property: 'pBool', type: 'boolean', label: 'Boolean', default: true },
   { property: 'pColor', type: 'color', label: 'Color', default: '#009bde' },
   { property: 'pText', type: 'textfield', label: 'Text', default: 'probe' },
@@ -19,11 +21,18 @@ export const properties = [
   },
 ] as const satisfies readonly PropertyDef[];
 
+/**
+ * SignalRGB ignores a meter without tags ("No tags specified for <meter>"). Edge is open in the
+ * test VM, so the meters target it (and VLC).
+ */
+const tags = ['msedge', 'vlc'];
+
 /** One meter of every type, all well inside the screen. */
 export const meters = [
   {
     meter: 'mLinear',
     type: 'linear',
+    tags,
     x: 0.05,
     y: 0.9,
     width: 0.2,
@@ -34,6 +43,7 @@ export const meters = [
   {
     meter: 'mArea',
     type: 'area',
+    tags,
     x: 0.4,
     y: 0.4,
     width: 0.2,
@@ -45,13 +55,22 @@ export const meters = [
   {
     meter: 'mText',
     type: 'ocr_textmatch',
+    tags,
     x: 0.35,
     y: 0.05,
     width: 0.3,
     height: 0.1,
     string: 'VICTORY',
   },
-  { meter: 'mNumber', type: 'ocr_numeric', x: 0.85, y: 0.9, width: 0.1, height: 0.05 },
+  {
+    meter: 'mNumber',
+    type: 'ocr_numeric',
+    tags,
+    x: 0.85,
+    y: 0.9,
+    width: 0.1,
+    height: 0.05,
+  },
 ] as const satisfies readonly MeterDef[];
 
 /** Options both builds share; each config adds its own title, file name and script mode. */
