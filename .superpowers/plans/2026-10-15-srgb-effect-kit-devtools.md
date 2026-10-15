@@ -2,21 +2,29 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** In `vite` dev, make every SignalRGB global exist and behave as in SignalRGB before effect code runs, and add a devtools drawer that drives them (properties, audio, screen zones, meters, canvas API events, renderer/FPS simulation, a SignalRGB view and a console counter), with nothing of it in the build.
+**Goal:** In `vite` dev, make every SignalRGB global exist and behave as in SignalRGB before effect code runs, and add a devtools drawer that drives them (properties, audio, screen zones, meters, canvas API events, renderer/FPS simulation, a SignalRGB view and a console counter), with nothing of it in the build. The `devtools` option selects one of three modes:
+- `'none'`: nothing is injected.
+- `'minimal'`: SignalRGB's environment only, with nothing visible.
+- `'full'` (the default): the environment plus the drawer.
 
 **Architecture:**
-- `srgbEffect()` gains a fourth, serve-only plugin, `srgb-effect:devtools`. It injects `<script type="module" src="/@id/__x00__virtual:srgb-effect/devtools">` at the start of `<head>`. Vite prefixes `base` itself. Module scripts run in document order, so this one runs before the effect's.
-- The virtual module imports the devtools bundle by absolute path and calls `startDevtools(config, { hot: import.meta.hot })`. The config (manifest plus `fireChangedOnLoad`) is inlined as JSON.
-- The bundle is resolved next to the plugin: `dist/devtools/index.js` when the plugin runs from the built package, or `src/devtools/index.ts` when it runs from source (vitest).
-- `startDevtools` runs synchronously. In order, it:
+- `srgbEffect()` gains a fourth, serve-only plugin, `srgb-effect:devtools`, unless `devtools` is `'none'`. It injects `<script type="module" src="/@id/__x00__virtual:srgb-effect/devtools">` at the start of `<head>`. Vite prefixes `base` itself. Module scripts run in document order, so this one runs before the effect's.
+- The virtual module imports a devtools bundle by absolute path and calls `startDevtools(config, { hot: import.meta.hot })`. The config (manifest plus `fireChangedOnLoad`) is inlined as JSON.
+- There are two bundles, `minimal` and `index` (full). Each is built by its own tsdown config, so each is self-contained, and `minimal` never contains drawer, tab, renderer or console-counter code.
+- The bundle for the mode is resolved next to the plugin: `dist/devtools/{minimal,index}.js` when the plugin runs from the built package, or `src/devtools/{minimal,index}.ts` when it runs from source (vitest).
+- Both entries share `startSimulation()`. It runs synchronously and:
   1. defines the handler globals;
-  2. applies the persisted renderer simulation (user agent, rAF throttle);
-  3. wraps the console;
-  4. sets the property globals in raw format;
-  5. installs the `engine` mock;
-  6. wires the `POST /canvas/event` relay (Vite WebSocket → `onCanvasApiEvent`).
-
-  On `DOMContentLoaded`, after every module script has run, it calls each `on<Prop>Changed` in property order. It then mounts the drawer in an open Shadow DOM on `<html>`.
+  2. sets the property globals in raw format;
+  3. installs the `engine` mock;
+  4. wires the `POST /canvas/event` relay (Vite WebSocket → `onCanvasApiEvent`);
+  5. on `DOMContentLoaded`, after every module script has run, calls each `on<Prop>Changed` in property order.
+- The `minimal` entry passes `NO_STORAGE`, so globals always start at the manifest defaults.
+- The full entry also:
+  - persists values in localStorage;
+  - applies the renderer simulation (user agent, rAF throttle);
+  - wraps the console;
+  - drives audio and screen;
+  - mounts the drawer in an open Shadow DOM on `<html>` after the load-time calls.
 - Logic lives in small modules with complete code and tests. The UI is vanilla TS with CSS in a TS string.
 
 **Tech Stack:** TypeScript ~6.0, Vite 8.3 (Rolldown), tsdown 0.23, vitest 5 + jsdom 30, @playwright/test 1.64 (Chromium), pnpm 10 workspaces, ESLint 10, Prettier 3.
@@ -34,8 +42,23 @@
 ## Global Constraints
 
 - **Dependencies:** add no runtime dependencies to `srgb-effect-kit`. The devtools are vanilla TypeScript, with CSS as a TS string inside an **open** Shadow DOM, and no UI framework. The only new dev dependencies are root `@playwright/test@^1.64.1` and `@types/node@^26.6.5`.
-- **When the devtools run:** only under `vite` serve (`apply: 'serve'`), and only when `devtools !== false`. They never appear in build output: the strings `srgb-effect-devtools`, `srgb-effect/devtools` and `srgb-effect-kit:` must not occur in a built effect.
-- **Packaging:** the devtools are an internal tsdown entry, `dist/devtools/index.js` (`platform: 'browser'`, `dts: false`). They are **not** in `package.json#exports`.
+- **The `devtools` option:** `devtools?: 'none' | 'minimal' | 'full' | { mode?: 'none' | 'minimal' | 'full'; fireChangedOnLoad?: boolean }`, with a default of `'full'`.
+  - `ResolvedOptions.devtools` is `{ mode, fireChangedOnLoad }`.
+  - A string means `{ mode, fireChangedOnLoad: true }`.
+  - `true`, `false` and unknown modes throw `[srgb-effect] devtools must be 'none', 'minimal', 'full' or { mode, fireChangedOnLoad } …`. The package is pre-release, so there is no boolean compatibility.
+- **What each mode injects:**
+  - `'none'` injects nothing in dev.
+  - `'minimal'` provides:
+    - the handler prelude;
+    - property globals at the manifest **defaults**, with no localStorage;
+    - the `engine` mock;
+    - the load-time calls;
+    - the `POST /canvas/event` relay.
+
+    It provides nothing visible: no drawer, no marker, no renderer simulation and no console counter. Its bundle must not contain that code.
+  - `'full'` is `'minimal'` plus everything else in this plan.
+- **When the devtools run:** only under `vite` serve (`apply: 'serve'`). They never appear in build output: the strings `srgb-effect-devtools`, `srgb-effect/devtools` and `srgb-effect-kit:` must not occur in a built effect.
+- **Packaging:** the devtools are two internal tsdown entries, `dist/devtools/index.js` (full) and `dist/devtools/minimal.js`. Each is built by its own config (`platform: 'browser'`, `dts: false`), so each bundle is self-contained. They are **not** in `package.json#exports`.
 - **Boundaries:** these are enforced by ESLint from Task 1.
   - `src/devtools/**` imports only `src/shared/**` and `src/runtime/**`. It must not import `node:*` or `vite`.
   - `src/vite/**` never imports `src/devtools/**`.
@@ -49,8 +72,8 @@
   | `textfield`, `list` | string |
 
   A change sets the global **first**, then calls `window.on<Prop>Changed?.()` with **no arguments**. Setting a value equal to the current one does nothing.
-- **Load-time calls:** if `fireChangedOnLoad` (default `true`), every `on<Prop>Changed` is called in property order on `DOMContentLoaded`. A handler that throws is reported with `reportError` and the remaining handlers still run.
-- **localStorage keys:** the format is `srgb-effect-kit:<title>:<key>`. The keys are `properties`, `drawer`, `audio`, `screen`, `meters`, `renderer` and `canvas-api`. Every read is validated, and every storage access tolerates blocked or full storage.
+- **Load-time calls:** in both modes, if `fireChangedOnLoad` (default `true`), every `on<Prop>Changed` is called in property order on `DOMContentLoaded`. A handler that throws is reported with `reportError` and the remaining handlers still run.
+- **localStorage keys** (full mode only): the format is `srgb-effect-kit:<title>:<key>`. The keys are `properties`, `drawer`, `audio`, `screen`, `meters`, `renderer` and `canvas-api`. Every read is validated, and every storage access tolerates blocked or full storage.
 - **Visible area:** the top-left 320×200 (`VISIBLE_WIDTH`, `VISIBLE_HEIGHT`).
 - **Simulated user agents:** these are placeholders equal to the fixtures in `src/runtime/renderer.test.ts`. They must satisfy `RENDERER_SIGNATURES` (a test checks this).
 - **DOM hooks:** these attributes are the test contract. Keep the names exactly:
@@ -86,7 +109,7 @@
    - Task 2 `records unhandled events and reports handler errors`.
 3. **Effect code that rewrites `<body>`** (`document.body.innerHTML = …`) or styles `body > *`. The drawer must survive and must not change the effect's layout or swallow its clicks. *Test:* Task 6 `survives effect code that clears the body` and `mounts a closed drawer in an open shadow root on <html>`, which checks `pointer-events: none` on the host.
 4. **Manifest strings containing HTML**, such as a label `<img src=x onerror=…>` or a list value `a&b`. These must render as text, and the value must round-trip unchanged. *Tests:* Task 7 `renders labels and list values as text`, and Task 6 `sets attributes and appends children as text, never HTML`.
-5. **A non-root `base` or a non-index HTML entry.** The devtools script URL must carry the base, while the canvas endpoint stays at `/canvas/event`, like SignalRGB's. *Tests:* Task 2 `prefixes the script URL with a custom base` and `keeps the endpoint at /canvas/event under a custom base`. The existing core-plugin tests already cover the redirect to a non-index entry.
+5. **A config written for the old boolean option** (`devtools: false` or `true`), or a misspelled mode. Without a check, `false` would silently mean `'full'`; instead it must fail at config time with a message that lists the valid forms. *Test:* Task 2 `rejects the old boolean form and unknown modes`, plus the `@ts-expect-error` in `index.test-d.ts`. A non-root `base` is covered too, by Task 2 `prefixes the script URL with a custom base` and `keeps the endpoint at /canvas/event under a custom base`.
 
 ## Verified during planning
 
@@ -101,7 +124,8 @@ Facts the design relies on:
 - **Serving the bundle:** the virtual module's `import "<abs path>"` is rewritten to `/@fs/…` and served even when the file is outside `server.fs.allow`, because Vite adds resolved import ids to `safeModulePaths`. It works from `node_modules` and from a directory outside the workspace.
 - **Canvas relay:** `server.ws.send('srgb-effect:canvas-event', data)` → `import.meta.hot.on(…)` works in the virtual module.
 - **Middleware order:** a `configureServer` middleware sees the raw URL before Vite's base handling. Vite's CORS middleware runs **before** plugin middlewares and answers `OPTIONS` preflights itself. That is why the endpoint does not handle `OPTIONS`.
-- **tsdown:** a third config `{ entry: { 'devtools/index': … }, platform: 'browser', dts: false }` emits a single self-contained `dist/devtools/index.js`, whose only export is `startDevtools`. `dist/vite/index.js` keeps `import.meta.url`, so the entry resolves relative to it.
+- **tsdown:** one config per devtools entry (`platform: 'browser'`, `dts: false`) emits self-contained `dist/devtools/index.js` (about 77 KB) and `dist/devtools/minimal.js` (about 9 KB). Each has no imports and exports only `startDevtools`. `minimal.js` contains none of `srgb-effect-devtools`, `:host`, `Ultralight/` and `[vite]`, so no drawer, styles, renderer simulation or console counter. `dist/vite/index.js` keeps `import.meta.url`, so each entry resolves relative to it.
+- **Minimal mode in the browser:** the e2e test sees `/devtools/minimal.js` requested and `/devtools/index.js` never requested. Globals start at their defaults even with stored values, the handler fires once, the canvas relay works and no host element exists. In `'none'` there are no globals and `POST /canvas/event` returns 404.
 - **Playwright:**
   - `locator.fill()` works on `input[type=range]` and `input[type=color]`, and locators pierce open shadow roots.
   - Playwright 1.64.1 drives `/usr/bin/chromium` 154 through `launchOptions.executablePath`.
@@ -119,8 +143,9 @@ Facts the design relies on:
 ```text
 .
 ├─ package.json                         + test:e2e, typecheck runs tsc -p e2e, devDeps @playwright/test, @types/node
-├─ playwright.config.ts                 NEW  Chromium, webServer = examples/basic-2d dev server on 127.0.0.1:5310
+├─ playwright.config.ts                 NEW  Chromium; dev servers: basic-2d (full) :5310, modes fixture minimal :5311 / none :5312
 ├─ e2e/ helpers.ts devtools.spec.ts tsconfig.json   NEW
+├─ e2e/fixtures/modes/ vite.config.mjs index.html main.js   NEW  one-property fixture, mode from SRGB_DEVTOOLS_MODE
 ├─ eslint.config.js                     devtools/vite boundary rules, ignore test-results/playwright-report
 ├─ .gitignore                           + test-results, playwright-report
 ├─ .github/workflows/ci.yml             + e2e job
@@ -128,17 +153,19 @@ Facts the design relies on:
 ├─ .superpowers/specs/…-design.md       §10/§11 refined, Plan 2 deltas recorded
 └─ packages/srgb-effect-kit/
    ├─ package.json                      version 0.1.0 (Task 13)
-   ├─ tsdown.config.ts                  + devtools/index browser entry
+   ├─ tsdown.config.ts                  + devtools/index and devtools/minimal browser entries
    ├─ test/helpers/devtools.ts          NEW fixture manifest + jsdom window reset
    ├─ test/devtoolsPlugin.test.ts       NEW
    └─ src/
       ├─ shared/  devtoolsProtocol.ts (NEW: ids, CANVAS_EVENT, DevtoolsConfig), prelude.ts (+handlerGlobalNames), index.ts
-      ├─ vite/    devtoolsEntry.ts, devtoolsPlugin.ts (NEW), index.ts (+plugin), options.ts (docs)
+      ├─ vite/    devtoolsEntry.ts, devtoolsPlugin.ts (NEW), index.ts (+plugin), options.ts (devtools modes)
       └─ devtools/
-         ├─ index.ts            startDevtools (bootstrap; the dist entry)
-         ├─ context.ts          DevtoolsContext, DevtoolsWindow, FrameScheduler, HotBridge, globalsOf
+         ├─ index.ts            startDevtools for 'full' (dist/devtools/index.js)
+         ├─ minimal.ts          startDevtools for 'minimal' (dist/devtools/minimal.js)
+         ├─ simulation.ts       startSimulation (shared environment), findInstance, rememberInstance
+         ├─ context.ts          StartOptions, SimulationContext, DevtoolsContext, DevtoolsWindow, FrameScheduler, HotBridge, globalsOf
          ├─ lifecycle.ts        onDomReady, reportError, callGlobal
-         ├─ storage.ts          createStorage (namespaced, fault tolerant), isRecord
+         ├─ storage.ts          createStorage (namespaced, fault tolerant), NO_STORAGE, isRecord
          ├─ properties.ts       raw formats + PropertyController
          ├─ engine.ts           MockEngine, createEngineMock, initialMeterValue
          ├─ canvasApi.ts        toCanvasApiEvent, CanvasApiController
@@ -156,7 +183,7 @@ Facts the design relies on:
 
 Logic modules have a sibling `*.test.ts`. The files without one are:
 - `context.ts`, which holds types only;
-- `engine.ts`, which `index.test.ts` covers;
+- `engine.ts` and `simulation.ts`, which `index.test.ts` and `minimal.test.ts` cover;
 - `styles.ts`;
 - `tabs/index.ts`, which `ui/index.test.ts` covers;
 - the browser-only capture glue: `openAudioCapture`, `openScreenCapture` and the tab capture in `view.ts`. jsdom cannot run these, so Task 11 checks them by hand.
@@ -168,7 +195,7 @@ Logic modules have a sibling `*.test.ts`. The files without one are:
 **Files:**
 - Create: `packages/srgb-effect-kit/src/shared/devtoolsProtocol.ts`
 - Modify: `packages/srgb-effect-kit/src/shared/index.ts`, `packages/srgb-effect-kit/src/shared/prelude.ts`, `packages/srgb-effect-kit/src/shared/prelude.test.ts`
-- Create: `packages/srgb-effect-kit/src/devtools/{context,lifecycle,storage,engine,properties,index}.ts`
+- Create: `packages/srgb-effect-kit/src/devtools/{context,lifecycle,storage,engine,properties,simulation,index}.ts`
 - Create: `packages/srgb-effect-kit/test/helpers/devtools.ts`
 - Modify: `eslint.config.js`
 - Test: `packages/srgb-effect-kit/src/devtools/{lifecycle,storage,properties,index}.test.ts`
@@ -188,7 +215,9 @@ Logic modules have a sibling `*.test.ts`. The files without one are:
     - `type DevtoolsWindow = Window & typeof globalThis`
     - `interface FrameScheduler { request(cb): number; cancel(id): void }`
     - `interface HotBridge { on(event, listener: (data: unknown) => void): void }`
-    - `interface DevtoolsContext { config; win; storage; raf; properties; engine }`. Later tasks add fields.
+    - `interface StartOptions { hot?: HotBridge; win?: DevtoolsWindow }`
+    - `interface SimulationContext { config; win; properties; engine }`. This is what both modes provide; Task 2 adds `canvasApi`.
+    - `interface DevtoolsContext extends SimulationContext { storage; raf }`. This is the full mode; later tasks add fields.
     - `globalsOf(win): Record<string, unknown>`
   - **`devtools/lifecycle.ts`:**
     - `onDomReady(win, cb)`
@@ -198,6 +227,7 @@ Logic modules have a sibling `*.test.ts`. The files without one are:
     - `STORAGE_PREFIX`
     - `interface DevtoolsStorage { prefix; read<T>(key, isValid): T | undefined; write(key, value); remove(key) }`
     - `createStorage(title, getStorage)`
+    - `NO_STORAGE`: keeps nothing; used by the minimal mode
     - `isRecord(value)`
   - **`devtools/engine.ts`:**
     - `MockAudio`, `MockZone`, `MockEngine`
@@ -208,10 +238,12 @@ Logic modules have a sibling `*.test.ts`. The files without one are:
     - `propertyRange(p)`, `defaultRaw(p)`, `coerceRaw(p, value)`
     - `interface PropertyController { definitions; get; set; reset; fireAll; subscribe }`
     - `createPropertyController(definitions, storage, win)`
-  - **`devtools/index.ts`:**
-    - `interface StartOptions { hot?: HotBridge; win?: DevtoolsWindow }`
+  - **`devtools/simulation.ts`:**
+    - `startSimulation(config, win, storage): SimulationContext`. It covers the handler globals, the property globals and the engine mock, and calls the handlers on DOM ready. Task 2 adds a `hot` parameter and the canvas relay.
+    - `findInstance<T>(win)` and `rememberInstance(win, context)`. These guard against a second start, using `Symbol.for('srgb-effect-kit.devtools')`.
+  - **`devtools/index.ts`:** the full-mode entry.
     - `startDevtools(config, options?): DevtoolsContext`
-    - re-exports `type DevtoolsContext`
+    - re-exports `type DevtoolsContext` and `type StartOptions`
   - **`test/helpers/devtools.ts`:**
     - `MANIFEST`: one property of every type and one meter of every type, title `'Devtools Test'`
     - `CONFIG`
@@ -464,7 +496,7 @@ export function restoreReadyState(): void {
 ```ts
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
-import { createStorage, isRecord } from './storage';
+import { createStorage, isRecord, NO_STORAGE } from './storage';
 
 const isNumber = (value: unknown): value is number => typeof value === 'number';
 
@@ -518,6 +550,14 @@ describe('createStorage', () => {
       expect(storage.read('a', isNumber)).toBeUndefined();
       expect(() => storage.remove('a')).not.toThrow();
     }
+  });
+});
+
+describe('NO_STORAGE', () => {
+  it('keeps nothing', () => {
+    NO_STORAGE.write('a', 1);
+    expect(NO_STORAGE.read('a', isNumber)).toBeUndefined();
+    expect(localStorage.length).toBe(0);
   });
 });
 
@@ -895,15 +935,27 @@ export interface HotBridge {
   on(event: string, listener: (data: unknown) => void): void;
 }
 
-/** Everything the bootstrap creates; the drawer's tabs read and drive it. */
-export interface DevtoolsContext {
+/** Options for `startDevtools()`, in both entries. */
+export interface StartOptions {
+  /** Vite's `import.meta.hot`, for events from the dev server. */
+  hot?: HotBridge;
+  /** The effect page's window. @default window */
+  win?: DevtoolsWindow;
+}
+
+/** The SignalRGB environment: what both the `minimal` and the `full` mode provide. */
+export interface SimulationContext {
   readonly config: DevtoolsConfig;
   readonly win: DevtoolsWindow;
+  readonly properties: PropertyController;
+  readonly engine: MockEngine;
+}
+
+/** Everything the `full` bootstrap creates; the drawer's tabs read and drive it. */
+export interface DevtoolsContext extends SimulationContext {
   readonly storage: DevtoolsStorage;
   /** The page's native rAF, unaffected by the UltraLight simulation. */
   readonly raf: FrameScheduler;
-  readonly properties: PropertyController;
-  readonly engine: MockEngine;
 }
 
 /** The window as a bag of globals, for names only known at runtime (property globals, handlers). */
@@ -969,6 +1021,14 @@ export interface DevtoolsStorage {
   write(key: string, value: unknown): void;
   remove(key: string): void;
 }
+
+/** Storage that keeps nothing: every read is undefined, every write is dropped. */
+export const NO_STORAGE: DevtoolsStorage = {
+  prefix: '',
+  read: () => undefined,
+  write: () => {},
+  remove: () => {},
+};
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -1211,66 +1271,81 @@ export function createPropertyController(
 }
 ```
 
-`packages/srgb-effect-kit/src/devtools/index.ts`:
+`packages/srgb-effect-kit/src/devtools/simulation.ts`. Task 2's minimal entry shares it with the full entry:
 ```ts
 import { handlerGlobalNames, type DevtoolsConfig } from '../shared';
-import {
-  globalsOf,
-  type DevtoolsContext,
-  type DevtoolsWindow,
-  type FrameScheduler,
-  type HotBridge,
-} from './context';
+import { globalsOf, type DevtoolsWindow, type SimulationContext } from './context';
 import { createEngineMock } from './engine';
 import { onDomReady } from './lifecycle';
 import { createPropertyController } from './properties';
-import { createStorage } from './storage';
-
-export type { DevtoolsContext } from './context';
-
-/** Options for `startDevtools()`. */
-export interface StartOptions {
-  /** Vite's `import.meta.hot`, for events from the dev server. */
-  hot?: HotBridge;
-  /** The effect page's window. @default window */
-  win?: DevtoolsWindow;
-}
+import type { DevtoolsStorage } from './storage';
 
 const INSTANCE = Symbol.for('srgb-effect-kit.devtools');
 
-/**
- * Dev-only bootstrap. The plugin's virtual module imports and calls it from a module script that
- * runs before the effect's own scripts. Everything before the DOM-ready callback runs
- * synchronously, so the effect's top-level code already sees SignalRGB's globals.
- */
-export function startDevtools(config: DevtoolsConfig, options: StartOptions = {}): DevtoolsContext {
-  const { win = window } = options;
-  const slot = win as unknown as Record<symbol, DevtoolsContext | undefined>;
-  const existing = slot[INSTANCE];
-  if (existing) return existing;
+/** The context a previous `startDevtools()` stored on this window, if any. */
+export const findInstance = <T extends SimulationContext>(win: DevtoolsWindow): T | undefined =>
+  (win as unknown as Record<symbol, T | undefined>)[INSTANCE];
 
+/** Remembers the context so a second start (e.g. a re-executed module) reuses it. */
+export function rememberInstance(win: DevtoolsWindow, context: SimulationContext): void {
+  (win as unknown as Record<symbol, SimulationContext>)[INSTANCE] = context;
+}
+
+/**
+ * Sets up SignalRGB's environment, synchronously: the handler globals (the build's prelude
+ * guarantee), the property globals (from `storage`, else the defaults) and the `engine` mock. On
+ * DOM ready, calls every `on<Prop>Changed` when `fireChangedOnLoad` is set.
+ */
+export function startSimulation(
+  config: DevtoolsConfig,
+  win: DevtoolsWindow,
+  storage: DevtoolsStorage,
+): SimulationContext {
   const globals = globalsOf(win);
-  // The build's prelude guarantee: bare `onSpeedChanged = …` must not throw in strict code.
+  // Bare `onSpeedChanged = …` must not throw in strict code.
   for (const name of handlerGlobalNames(config.manifest)) {
     if (!(name in win)) globals[name] = undefined;
   }
+  const properties = createPropertyController(config.manifest.properties ?? [], storage, win);
+  const engine = createEngineMock(config.manifest.meters);
+  globals.engine = engine;
+
+  // DOMContentLoaded fires after every module script ran, so effect code has assigned its handlers.
+  onDomReady(win, () => {
+    if (config.fireChangedOnLoad) properties.fireAll();
+  });
+  return { config, win, properties, engine };
+}
+```
+
+`packages/srgb-effect-kit/src/devtools/index.ts`:
+```ts
+import type { DevtoolsConfig } from '../shared';
+import type { DevtoolsContext, FrameScheduler, StartOptions } from './context';
+import { findInstance, rememberInstance, startSimulation } from './simulation';
+import { createStorage } from './storage';
+
+export type { DevtoolsContext, StartOptions } from './context';
+
+/**
+ * Entry for `devtools: 'full'` (the default). The plugin's virtual module imports and calls it
+ * from a module script that runs before the effect's own scripts. Everything before the DOM-ready
+ * callbacks runs synchronously, so the effect's top-level code already sees SignalRGB's globals.
+ */
+export function startDevtools(config: DevtoolsConfig, options: StartOptions = {}): DevtoolsContext {
+  const { win = window } = options;
+  const existing = findInstance<DevtoolsContext>(win);
+  if (existing) return existing;
 
   const storage = createStorage(config.manifest.title, () => win.localStorage);
   const raf: FrameScheduler = {
     request: win.requestAnimationFrame.bind(win),
     cancel: win.cancelAnimationFrame.bind(win),
   };
-  const properties = createPropertyController(config.manifest.properties ?? [], storage, win);
-  const engine = createEngineMock(config.manifest.meters);
-  globals.engine = engine;
+  const simulation = startSimulation(config, win, storage);
 
-  const context: DevtoolsContext = { config, win, storage, raf, properties, engine };
-  slot[INSTANCE] = context;
-
-  // DOMContentLoaded fires after every module script ran, so effect code has assigned its handlers.
-  onDomReady(win, () => {
-    if (config.fireChangedOnLoad) properties.fireAll();
-  });
+  const context: DevtoolsContext = { ...simulation, storage, raf };
+  rememberInstance(win, context);
   return context;
 }
 ```
@@ -1290,21 +1365,36 @@ git commit -m "feat(devtools): define SignalRGB globals and fire change handlers
 ---
 
 
-### Task 2: Vite integration: virtual module, canvas event endpoint, devtools bundle
+### Task 2: Vite integration: devtools modes, minimal entry, virtual module, canvas event endpoint
 
 **Files:**
-- Create: `packages/srgb-effect-kit/src/devtools/canvasApi.ts`
-- Modify: `packages/srgb-effect-kit/src/devtools/{context,index}.ts`, `packages/srgb-effect-kit/src/devtools/index.test.ts`
-- Create: `packages/srgb-effect-kit/src/vite/devtoolsEntry.ts`, `packages/srgb-effect-kit/src/vite/devtoolsPlugin.ts`
-- Modify: `packages/srgb-effect-kit/src/vite/index.ts`, `packages/srgb-effect-kit/src/vite/options.ts`, `packages/srgb-effect-kit/tsdown.config.ts`
-- Test: `packages/srgb-effect-kit/src/devtools/canvasApi.test.ts`, `packages/srgb-effect-kit/src/vite/devtoolsEntry.test.ts`, `packages/srgb-effect-kit/test/devtoolsPlugin.test.ts`
+- Create:
+  - `packages/srgb-effect-kit/src/devtools/canvasApi.ts`
+  - `packages/srgb-effect-kit/src/devtools/minimal.ts`
+  - `packages/srgb-effect-kit/src/vite/devtoolsEntry.ts`
+  - `packages/srgb-effect-kit/src/vite/devtoolsPlugin.ts`
+- Modify:
+  - `packages/srgb-effect-kit/src/devtools/{context,simulation,index}.ts`
+  - `packages/srgb-effect-kit/src/devtools/index.test.ts`
+  - `packages/srgb-effect-kit/src/vite/options.ts`, `packages/srgb-effect-kit/src/vite/options.test.ts`
+  - `packages/srgb-effect-kit/src/vite/index.ts`, `packages/srgb-effect-kit/src/vite/index.test-d.ts`
+  - `packages/srgb-effect-kit/tsdown.config.ts`
+- Test:
+  - `packages/srgb-effect-kit/src/devtools/{canvasApi,minimal}.test.ts`
+  - `packages/srgb-effect-kit/src/vite/devtoolsEntry.test.ts`
+  - `packages/srgb-effect-kit/test/devtoolsPlugin.test.ts`
 
 **Interfaces:**
 - Consumes:
-  - From Task 1: `CANVAS_EVENT`, `CANVAS_EVENT_PATH`, `DEVTOOLS_MODULE_ID`, `DevtoolsConfig`, `callGlobal`, `startDevtools`, `StartOptions.hot`, `DevtoolsContext`.
+  - From Task 1: `CANVAS_EVENT`, `CANVAS_EVENT_PATH`, `DEVTOOLS_MODULE_ID`, `DevtoolsConfig`, `callGlobal`, `startSimulation`, `findInstance`, `rememberInstance`, `NO_STORAGE`, `StartOptions`, `SimulationContext`.
   - From the runtime: `CanvasApiEvent`.
-  - From `src/vite/options.ts`: `ResolvedOptions.devtools: false | Required<DevtoolsOptions>`.
 - Produces:
+  - **`vite/options.ts`** (replaces the boolean option; the package is pre-release):
+    - `type DevtoolsMode = 'none' | 'minimal' | 'full'`
+    - `interface DevtoolsOptions { mode?: DevtoolsMode; fireChangedOnLoad?: boolean }`
+    - `SrgbEffectOptions.devtools?: DevtoolsMode | DevtoolsOptions`, with a default of `'full'`
+    - `ResolvedOptions.devtools: Required<DevtoolsOptions>`. A string means `{ mode, fireChangedOnLoad: true }`. Anything else throws `[srgb-effect] devtools must be 'none', 'minimal', 'full' or { mode, fireChangedOnLoad } (got …)`.
+    - `srgb-effect-kit/vite` also exports `type DevtoolsMode`.
   - **`devtools/canvasApi.ts`:**
     - `type CanvasEventSource = 'drawer' | 'http'`
     - `interface CanvasEventRecord extends CanvasApiEvent { source; handled; time }`
@@ -1312,15 +1402,20 @@ git commit -m "feat(devtools): define SignalRGB globals and fire change handlers
     - `toCanvasApiEvent(data): CanvasApiEvent | undefined`
     - `interface CanvasApiController { history; dispatch(event, source): boolean; subscribe }`
     - `createCanvasApi(win, now?)`
-    - `DevtoolsContext` gains `canvasApi`.
-  - **`vite/devtoolsEntry.ts`:** `resolveDevtoolsEntry(from = import.meta.url): string`. It tries `../devtools/index.js`, then `../devtools/index.ts`, and throws `[srgb-effect] devtools bundle not found …` if neither exists.
+    - `SimulationContext` gains `canvasApi`. `startSimulation(config, win, storage, hot?)` relays `CANVAS_EVENT`.
+  - **`devtools/minimal.ts`:** the minimal-mode entry. `startDevtools(config, options?): SimulationContext` is `startSimulation` with `NO_STORAGE`, plus the double-start guard.
+  - **`vite/devtoolsEntry.ts`:**
+    - `type DevtoolsEntryMode = 'minimal' | 'full'`
+    - `resolveDevtoolsEntry(mode, from = import.meta.url): string`. It looks for `../devtools/{minimal|index}.js`, then `.ts`, and throws `[srgb-effect] devtools bundle "<name>" not found …` if neither exists.
   - **`vite/devtoolsPlugin.ts`:**
     - `DEVTOOLS_MODULE_URL = '/@id/__x00__virtual:srgb-effect/devtools'`
     - `devtoolsModuleCode(entry, config): string`
     - `canvasEventMiddleware(send): Connect.NextHandleFunction`
-    - `devtoolsPlugin(manifest, options: Required<DevtoolsOptions>, entry?): Plugin`. The plugin is named `srgb-effect:devtools` and applies only in serve.
-  - **`srgbEffect()`** returns `[core, build, moduleScope]`, plus `devtoolsPlugin` when `devtools !== false`.
-  - **tsdown** writes `dist/devtools/index.js`.
+    - `devtoolsPlugin(manifest, { mode: DevtoolsEntryMode; fireChangedOnLoad }, entry?): Plugin`. The plugin is named `srgb-effect:devtools` and applies only in serve.
+  - **`srgbEffect()`** adds `devtoolsPlugin` unless the mode is `'none'`.
+  - **tsdown** writes `dist/devtools/index.js` and `dist/devtools/minimal.js`, each self-contained.
+
+How the minimal mode avoids loading the UI: it is a separate entry, built by its own tsdown config. `minimal.ts` imports only `simulation.ts`, which imports `properties`, `engine`, `canvasApi`, `lifecycle`, `storage` and shared. Nothing in that graph imports `ui/`, `renderer`, `consoleCounter`, `audioController` or `screenController`. The plugin serves `minimal.js` in `'minimal'` mode and `index.js` in `'full'` mode. Step 4 checks the minimal bundle's contents, and the Task 3 e2e test checks which file the browser requests.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1390,6 +1485,235 @@ describe('createCanvasApi', () => {
 });
 ```
 
+`packages/srgb-effect-kit/src/devtools/minimal.test.ts`:
+```ts
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  CONFIG,
+  resetDevtoolsWindow,
+  restoreReadyState,
+  setReadyState,
+} from '../../test/helpers/devtools';
+import { startDevtools } from './minimal';
+
+const globals = window as unknown as Record<string, unknown>;
+const userAgent = navigator.userAgent;
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  resetDevtoolsWindow();
+  vi.stubGlobal('reportError', vi.fn());
+});
+afterEach(() => {
+  restoreReadyState();
+  vi.unstubAllGlobals();
+  vi.clearAllTimers();
+  vi.useRealTimers();
+});
+
+describe('startDevtools (minimal)', () => {
+  it('defines handler globals, default property globals and the engine', () => {
+    setReadyState('interactive');
+    startDevtools(CONFIG);
+    expect([globals.speed, globals.rainbow, globals.tint, globals.mode]).toEqual([
+      50,
+      '1',
+      '#009bde',
+      'Wave',
+    ]);
+    expect('onSpeedChanged' in window && 'onCanvasApiEvent' in window).toBe(true);
+    expect(window.engine.audio.level).toBe(-100);
+    expect(window.engine.zone.hue).toHaveLength(560);
+    expect({ ...window.engine.vision }).toEqual({ health: 0, mana: 0, victory: 0, score: -1 });
+  });
+
+  it('ignores and never writes persisted values', () => {
+    localStorage.setItem(
+      'srgb-effect-kit:Devtools Test:properties',
+      JSON.stringify({ speed: 99, mode: 'Pulse' }),
+    );
+    const context = startDevtools(CONFIG);
+    expect([globals.speed, globals.mode]).toEqual([50, 'Wave']);
+    context.properties.set('speed', 10);
+    expect(globals.speed).toBe(10);
+    expect(JSON.parse(localStorage.getItem('srgb-effect-kit:Devtools Test:properties')!)).toEqual({
+      speed: 99,
+      mode: 'Pulse',
+    });
+  });
+
+  it('fires handlers on DOMContentLoaded, per fireChangedOnLoad', () => {
+    setReadyState('interactive');
+    startDevtools(CONFIG);
+    const handler = vi.fn();
+    globals.onSpeedChanged = handler;
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+    expect(handler).toHaveBeenCalledOnce();
+
+    resetDevtoolsWindow();
+    startDevtools({ ...CONFIG, fireChangedOnLoad: false });
+    const silent = vi.fn();
+    globals.onSpeedChanged = silent;
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+    expect(silent).not.toHaveBeenCalled();
+  });
+
+  it('relays canvas events from the dev server', () => {
+    const listeners = new Map<string, (data: unknown) => void>();
+    startDevtools(CONFIG, { hot: { on: (event, listener) => listeners.set(event, listener) } });
+    const handler = vi.fn();
+    window.onCanvasApiEvent = handler;
+    listeners.get('srgb-effect:canvas-event')!({ sender: 'game', event: 'hit' });
+    expect(handler).toHaveBeenCalledWith({ sender: 'game', event: 'hit' });
+  });
+
+  it('shows nothing and simulates no renderer or console counter', () => {
+    localStorage.setItem(
+      'srgb-effect-kit:Devtools Test:renderer',
+      JSON.stringify({ renderer: 'ultralight', fps: 30 }),
+    );
+    const raf = window.requestAnimationFrame;
+    const log = console.log;
+    setReadyState('interactive');
+    startDevtools(CONFIG);
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+    vi.runAllTimers();
+    expect(document.querySelector('srgb-effect-devtools')).toBeNull();
+    expect(navigator.userAgent).toBe(userAgent);
+    expect(window.requestAnimationFrame).toBe(raf);
+    expect(console.log).toBe(log);
+  });
+
+  it('returns the existing context when started twice', () => {
+    const first = startDevtools(CONFIG);
+    expect(startDevtools({ ...CONFIG, manifest: { title: 'Other' } })).toBe(first);
+  });
+});
+```
+
+In `packages/srgb-effect-kit/src/devtools/index.test.ts`, replace:
+
+Replace:
+
+```ts
+  it('returns the existing context when started twice', () => {
+```
+
+with:
+
+```ts
+  it('relays canvas events from the dev server to onCanvasApiEvent', () => {
+    const listeners = new Map<string, (data: unknown) => void>();
+    start(CONFIG, { hot: { on: (event, listener) => listeners.set(event, listener) } });
+    const handler = vi.fn();
+    window.onCanvasApiEvent = handler;
+    const relay = listeners.get('srgb-effect:canvas-event')!;
+    relay({ sender: 'game', event: 'hit' });
+    relay({ nonsense: true });
+    expect(handler).toHaveBeenCalledOnce();
+    expect(handler).toHaveBeenCalledWith({ sender: 'game', event: 'hit' });
+  });
+
+  it('returns the existing context when started twice', () => {
+```
+
+Replace `packages/srgb-effect-kit/src/vite/options.test.ts` with:
+```ts
+import { describe, expect, it } from 'vitest';
+import { resolveOptions } from './options';
+
+describe('resolveOptions', () => {
+  it('applies defaults and splits manifest from plugin options', () => {
+    expect(resolveOptions({ title: 'Hue Cycle', publisher: 'me' })).toEqual({
+      manifest: { title: 'Hue Cycle', publisher: 'me' },
+      typesFile: 'src/srgb-effect.d.ts',
+      fileName: 'hue-cycle.html',
+      script: 'module',
+      dropConsole: true,
+      target: 'es2020',
+      devtools: { mode: 'full', fireChangedOnLoad: true },
+    });
+  });
+
+  it('defaults script to module', () => {
+    expect(resolveOptions({ title: 'X' }).script).toBe('module');
+    expect(resolveOptions({ title: 'X', script: 'classic' }).script).toBe('classic');
+  });
+
+  it('respects overrides', () => {
+    const resolved = resolveOptions({
+      title: 'X',
+      typesFile: 'types/effect.d.ts',
+      fileName: 'custom.html',
+      script: 'classic',
+      dropConsole: false,
+      target: ['chrome100', 'safari15'],
+      devtools: { mode: 'minimal', fireChangedOnLoad: false },
+    });
+    expect(resolved).toMatchObject({
+      typesFile: 'types/effect.d.ts',
+      fileName: 'custom.html',
+      script: 'classic',
+      dropConsole: false,
+      target: ['chrome100', 'safari15'],
+      devtools: { mode: 'minimal', fireChangedOnLoad: false },
+    });
+  });
+
+  it('resolves the devtools mode from a string or the object form', () => {
+    expect(resolveOptions({ title: 'X', devtools: 'none' }).devtools).toEqual({
+      mode: 'none',
+      fireChangedOnLoad: true,
+    });
+    expect(resolveOptions({ title: 'X', devtools: 'minimal' }).devtools).toEqual({
+      mode: 'minimal',
+      fireChangedOnLoad: true,
+    });
+    expect(resolveOptions({ title: 'X', devtools: {} }).devtools).toEqual({
+      mode: 'full',
+      fireChangedOnLoad: true,
+    });
+    expect(resolveOptions({ title: 'X', devtools: { fireChangedOnLoad: false } }).devtools).toEqual(
+      { mode: 'full', fireChangedOnLoad: false },
+    );
+  });
+
+  it('rejects the old boolean form and unknown modes', () => {
+    for (const devtools of [
+      true,
+      false,
+      'off',
+      { mode: 'max' },
+      { fireChangedOnLoad: 'yes' },
+      null,
+    ]) {
+      expect(() => resolveOptions({ title: 'X', devtools } as never)).toThrow(
+        /\[srgb-effect\] devtools must be 'none', 'minimal', 'full' or \{ mode, fireChangedOnLoad \}/,
+      );
+    }
+  });
+
+  it('rejects file names that are not plain .html files', () => {
+    expect(() => resolveOptions({ title: 'X', fileName: 'out/x.html' })).toThrow(
+      /fileName must be a plain file name/,
+    );
+    expect(() => resolveOptions({ title: 'X', fileName: 'x.htm' })).toThrow(
+      /fileName must be a plain file name/,
+    );
+  });
+});
+```
+
+Append to `packages/srgb-effect-kit/src/vite/index.test-d.ts`:
+```ts
+
+srgbEffect({ title: 'X', devtools: 'minimal' });
+srgbEffect({ title: 'X', devtools: { mode: 'none', fireChangedOnLoad: false } });
+// @ts-expect-error the boolean form was replaced by modes
+srgbEffect({ title: 'X', devtools: false });
+```
+
 `packages/srgb-effect-kit/src/vite/devtoolsEntry.test.ts`:
 ```ts
 import fs from 'node:fs';
@@ -1416,34 +1740,43 @@ const layout = (files: string[], from: string) => {
 };
 
 describe('resolveDevtoolsEntry', () => {
-  it('finds the built bundle next to the built plugin', () => {
+  it('finds each mode’s built bundle next to the built plugin', () => {
     const { root, url } = layout(
-      ['dist/vite/index.js', 'dist/devtools/index.js'],
+      ['dist/vite/index.js', 'dist/devtools/index.js', 'dist/devtools/minimal.js'],
       'dist/vite/index.js',
     );
-    expect(resolveDevtoolsEntry(url)).toBe(path.join(root, 'dist/devtools/index.js'));
+    expect(resolveDevtoolsEntry('full', url)).toBe(path.join(root, 'dist/devtools/index.js'));
+    expect(resolveDevtoolsEntry('minimal', url)).toBe(path.join(root, 'dist/devtools/minimal.js'));
   });
 
   it('falls back to the TypeScript source when running from source', () => {
     const { root, url } = layout(
-      ['src/vite/devtoolsEntry.ts', 'src/devtools/index.ts'],
+      ['src/vite/devtoolsEntry.ts', 'src/devtools/index.ts', 'src/devtools/minimal.ts'],
       'src/vite/devtoolsEntry.ts',
     );
-    expect(resolveDevtoolsEntry(url)).toBe(path.join(root, 'src/devtools/index.ts'));
+    expect(resolveDevtoolsEntry('full', url)).toBe(path.join(root, 'src/devtools/index.ts'));
+    expect(resolveDevtoolsEntry('minimal', url)).toBe(path.join(root, 'src/devtools/minimal.ts'));
   });
 
-  it('throws a clear error when neither exists', () => {
-    const { url } = layout(['dist/vite/index.js'], 'dist/vite/index.js');
-    expect(() => resolveDevtoolsEntry(url)).toThrow(/\[srgb-effect\] devtools bundle not found/);
+  it('throws a clear error when the bundle is missing', () => {
+    const { url } = layout(['dist/vite/index.js', 'dist/devtools/index.js'], 'dist/vite/index.js');
+    expect(() => resolveDevtoolsEntry('minimal', url)).toThrow(
+      /\[srgb-effect\] devtools bundle "minimal" not found/,
+    );
   });
 
-  it('resolves the source entry from this module by default', () => {
-    expect(resolveDevtoolsEntry()).toBe(path.resolve(import.meta.dirname, '../devtools/index.ts'));
+  it('resolves the source entries from this module by default', () => {
+    expect(resolveDevtoolsEntry('full')).toBe(
+      path.resolve(import.meta.dirname, '../devtools/index.ts'),
+    );
+    expect(resolveDevtoolsEntry('minimal')).toBe(
+      path.resolve(import.meta.dirname, '../devtools/minimal.ts'),
+    );
   });
 });
 ```
 
-`packages/srgb-effect-kit/test/devtoolsPlugin.test.ts`. It runs the plugin from source, so the virtual module imports `src/devtools/index.ts` through `/@fs/`:
+`packages/srgb-effect-kit/test/devtoolsPlugin.test.ts`. It runs the plugin from source, so the virtual module imports `src/devtools/{index,minimal}.ts` through `/@fs/`:
 ```ts
 import fs from 'node:fs';
 import path from 'node:path';
@@ -1561,22 +1894,25 @@ describe('devtools plugin', () => {
     expect(send).toHaveBeenCalledOnce();
   });
 
-  it('does nothing with devtools: false', async () => {
-    const root = createFixture({ 'index.html': INDEX });
-    const server = await createServer({
-      root,
-      configFile: false,
-      logLevel: 'silent',
-      server: { host: '127.0.0.1', port: 0, ws: false },
-      plugins: [srgbEffect({ ...options, devtools: false })],
+  it('loads the small minimal entry in minimal mode', async () => {
+    const { server, html } = await serve({
+      plugins: [srgbEffect({ ...options, devtools: 'minimal' })],
     });
-    servers.push(server);
-    await server.listen();
-    const html = await server.transformIndexHtml('/index.html', INDEX);
+    expect(html).toContain(TAG);
+    const result = await server.transformRequest('virtual:srgb-effect/devtools');
+    expect(result?.code).toMatch(/from "\/@fs\/[^"]*\/src\/devtools\/minimal\.ts"/);
+    expect(result?.code).toContain('"fireChangedOnLoad":true');
+  });
+
+  it("injects nothing with devtools: 'none'", async () => {
+    const { server, html, url } = await serve(
+      { plugins: [srgbEffect({ ...options, devtools: 'none' })] },
+      true,
+    );
     expect(html).not.toContain('srgb-effect/devtools');
-    const response = await fetch(new URL('/canvas/event', server.resolvedUrls?.local[0]), {
-      method: 'POST',
-    });
+    expect(html).not.toMatch(/onSpeedChanged|engine/);
+    await expect(server.transformRequest('virtual:srgb-effect/devtools')).rejects.toThrow();
+    const response = await fetch(new URL('/canvas/event', url), { method: 'POST' });
     expect(response.status).toBe(404);
   });
 
@@ -1590,36 +1926,10 @@ describe('devtools plugin', () => {
 });
 ```
 
-In `packages/srgb-effect-kit/src/devtools/index.test.ts`, replace:
+Run: `pnpm --filter srgb-effect-kit exec vitest run src/devtools src/vite test/devtoolsPlugin.test.ts`
+Expected: FAIL. The following cannot be resolved: `./canvasApi`, `./minimal` and `./devtoolsEntry`. The options tests fail on `mode`, and the plugin tests find no devtools tag.
 
-Replace:
-
-```ts
-  it('returns the existing context when started twice', () => {
-```
-
-with:
-
-```ts
-  it('relays canvas events from the dev server to onCanvasApiEvent', () => {
-    const listeners = new Map<string, (data: unknown) => void>();
-    start(CONFIG, { hot: { on: (event, listener) => listeners.set(event, listener) } });
-    const handler = vi.fn();
-    window.onCanvasApiEvent = handler;
-    const relay = listeners.get('srgb-effect:canvas-event')!;
-    relay({ sender: 'game', event: 'hit' });
-    relay({ nonsense: true });
-    expect(handler).toHaveBeenCalledOnce();
-    expect(handler).toHaveBeenCalledWith({ sender: 'game', event: 'hit' });
-  });
-
-  it('returns the existing context when started twice', () => {
-```
-
-Run: `pnpm --filter srgb-effect-kit exec vitest run src/devtools src/vite/devtoolsEntry.test.ts test/devtoolsPlugin.test.ts`
-Expected: FAIL. `./canvasApi` and `./devtoolsEntry` cannot be resolved, and the plugin tests find no devtools tag.
-
-- [ ] **Step 2: Implement the canvas API module and relay it in the bootstrap**
+- [ ] **Step 2: Add the canvas API module, the relay and the minimal entry**
 
 `packages/srgb-effect-kit/src/devtools/canvasApi.ts`:
 ```ts
@@ -1716,12 +2026,13 @@ with:
 }
 ```
 
-In `packages/srgb-effect-kit/src/devtools/index.ts`, make these replacements:
+In `packages/srgb-effect-kit/src/devtools/simulation.ts`, make these replacements:
 
 1. Replace:
 
 ```ts
 import { handlerGlobalNames, type DevtoolsConfig } from '../shared';
+import { globalsOf, type DevtoolsWindow, type SimulationContext } from './context';
 ```
 
 with:
@@ -1729,9 +2040,75 @@ with:
 ```ts
 import { CANVAS_EVENT, handlerGlobalNames, type DevtoolsConfig } from '../shared';
 import { createCanvasApi, toCanvasApiEvent } from './canvasApi';
+import { globalsOf, type DevtoolsWindow, type HotBridge, type SimulationContext } from './context';
 ```
 
 2. Replace:
+
+```ts
+ * guarantee), the property globals (from `storage`, else the defaults) and the `engine` mock. On
+ * DOM ready, calls every `on<Prop>Changed` when `fireChangedOnLoad` is set.
+```
+
+with:
+
+```ts
+ * guarantee), the property globals (from `storage`, else the defaults), the `engine` mock and the
+ * canvas-event relay. On DOM ready, calls every `on<Prop>Changed` when `fireChangedOnLoad` is set.
+```
+
+3. Replace:
+
+```ts
+  storage: DevtoolsStorage,
+): SimulationContext {
+```
+
+with:
+
+```ts
+  storage: DevtoolsStorage,
+  hot?: HotBridge,
+): SimulationContext {
+```
+
+4. Replace:
+
+```ts
+  globals.engine = engine;
+
+  // DOMContentLoaded
+```
+
+with:
+
+```ts
+  globals.engine = engine;
+  const canvasApi = createCanvasApi(win);
+
+  // `POST /canvas/event` on the dev server arrives over Vite's WebSocket.
+  hot?.on(CANVAS_EVENT, (data) => {
+    const event = toCanvasApiEvent(data);
+    if (event) canvasApi.dispatch(event, 'http');
+  });
+  // DOMContentLoaded
+```
+
+5. Replace:
+
+```ts
+  return { config, win, properties, engine };
+```
+
+with:
+
+```ts
+  return { config, win, properties, engine, canvasApi };
+```
+
+In `packages/srgb-effect-kit/src/devtools/index.ts`, make these replacements:
+
+1. Replace:
 
 ```ts
   const { win = window } = options;
@@ -1743,29 +2120,164 @@ with:
   const { hot, win = window } = options;
 ```
 
-3. Replace:
+2. Replace:
 
 ```ts
-  const context: DevtoolsContext = { config, win, storage, raf, properties, engine };
-  slot[INSTANCE] = context;
+  const simulation = startSimulation(config, win, storage);
 ```
 
 with:
 
 ```ts
-  const canvasApi = createCanvasApi(win);
-
-  const context: DevtoolsContext = { config, win, storage, raf, properties, engine, canvasApi };
-  slot[INSTANCE] = context;
-
-  // `POST /canvas/event` on the dev server arrives over Vite's WebSocket.
-  hot?.on(CANVAS_EVENT, (data) => {
-    const event = toCanvasApiEvent(data);
-    if (event) canvasApi.dispatch(event, 'http');
-  });
+  const simulation = startSimulation(config, win, storage, hot);
 ```
 
-- [ ] **Step 3: Implement the entry resolver and the plugin**
+`packages/srgb-effect-kit/src/devtools/minimal.ts`:
+```ts
+import type { DevtoolsConfig } from '../shared';
+import type { SimulationContext, StartOptions } from './context';
+import { findInstance, rememberInstance, startSimulation } from './simulation';
+import { NO_STORAGE } from './storage';
+
+export type { SimulationContext, StartOptions } from './context';
+
+/**
+ * Entry for `devtools: 'minimal'`: SignalRGB's environment and nothing visible. Property globals
+ * always start from the manifest defaults (nothing is persisted, as nothing can change them), the
+ * renderer stays the browser's, and no drawer, marker or console counter is loaded.
+ */
+export function startDevtools(
+  config: DevtoolsConfig,
+  options: StartOptions = {},
+): SimulationContext {
+  const { hot, win = window } = options;
+  const existing = findInstance(win);
+  if (existing) return existing;
+  const context = startSimulation(config, win, NO_STORAGE, hot);
+  rememberInstance(win, context);
+  return context;
+}
+```
+
+- [ ] **Step 3: Replace the boolean option with modes, and add the entry resolver and the plugin**
+
+Replace `packages/srgb-effect-kit/src/vite/options.ts` with:
+```ts
+import { kebabCase, type EffectManifest } from '../shared';
+
+/**
+ * How much of SignalRGB `vite` dev simulates:
+ * - `'none'`: nothing; the page is served as is.
+ * - `'minimal'`: SignalRGB's environment only (handler and property globals at their defaults,
+ *   the `engine` mock, load-time handler calls, `POST /canvas/event`), with nothing visible.
+ * - `'full'`: the minimal environment plus the devtools drawer and its simulations.
+ */
+export type DevtoolsMode = 'none' | 'minimal' | 'full';
+
+/** Object form of the `devtools` option. */
+export interface DevtoolsOptions {
+  /** @default 'full' */
+  mode?: DevtoolsMode;
+  /** Call every on<Prop>Changed once at load, like SignalRGB does. @default true */
+  fireChangedOnLoad?: boolean;
+}
+
+const DEVTOOLS_MODES: readonly DevtoolsMode[] = ['none', 'minimal', 'full'];
+
+/** Options for `srgbEffect()`: the effect manifest plus build settings. */
+export interface SrgbEffectOptions extends EffectManifest {
+  /**
+   * Generated globals typings, relative to the Vite root. Generated on every `vite` and `vite build`; add it to `.gitignore`.
+   * @default 'src/srgb-effect.d.ts'
+   */
+  typesFile?: string;
+  /**
+   * Output file name: a plain name ending in `.html`, without directories.
+   * @default kebab-cased title + '.html'
+   */
+  fileName?: string;
+  /**
+   * `'module'` (the default) emits one inline `<script type="module">`, which allows external
+   * imports, top-level await and `import.meta`. `'classic'` is opt-in for engines that cannot run
+   * module scripts: it bundles the effect as a strict-mode IIFE in a plain `<script>` and rejects
+   * those three features.
+   * @default 'module'
+   */
+  script?: 'classic' | 'module';
+  /**
+   * Strip `console.*` and `debugger` from the build (SignalRGB requires a clean console). Also
+   * minifies the script, even with `build.minify: false`. @default true
+   */
+  dropConsole?: boolean;
+  /** Build target. Provisional until probed. @default 'es2020' */
+  target?: string | string[];
+  /**
+   * SignalRGB simulation in `vite` dev, never part of the build: a mode (`'none'`, `'minimal'` or
+   * `'full'`, see {@link DevtoolsMode}) or `{ mode, fireChangedOnLoad }`. A string means
+   * `{ mode, fireChangedOnLoad: true }`. @default 'full'
+   */
+  devtools?: DevtoolsMode | DevtoolsOptions;
+}
+
+/** `SrgbEffectOptions` with defaults applied, split into the manifest and plugin settings. */
+export interface ResolvedOptions {
+  manifest: EffectManifest;
+  typesFile: string;
+  fileName: string;
+  script: 'classic' | 'module';
+  dropConsole: boolean;
+  target: string | string[];
+  devtools: Required<DevtoolsOptions>;
+}
+
+/** Resolves the `devtools` option, rejecting anything but a mode or the object form. */
+function resolveDevtools(devtools: unknown): Required<DevtoolsOptions> {
+  const options: unknown = typeof devtools === 'string' ? { mode: devtools } : devtools;
+  if (typeof options === 'object' && options !== null) {
+    const { mode = 'full', fireChangedOnLoad = true } = options as DevtoolsOptions;
+    if (DEVTOOLS_MODES.includes(mode) && typeof fireChangedOnLoad === 'boolean') {
+      return { mode, fireChangedOnLoad };
+    }
+  }
+  throw new Error(
+    `[srgb-effect] devtools must be 'none', 'minimal', 'full' or { mode, fireChangedOnLoad } (got ${JSON.stringify(devtools)})`,
+  );
+}
+
+/**
+ * Applies defaults and splits plugin settings from the manifest.
+ * @throws Error when `fileName` does not end in `.html` or contains a path separator, or when
+ * `devtools` is not a mode or `{ mode?, fireChangedOnLoad? }` (for example the old `true`/`false`).
+ */
+export function resolveOptions(options: SrgbEffectOptions): ResolvedOptions {
+  const {
+    typesFile = 'src/srgb-effect.d.ts',
+    fileName,
+    script = 'module',
+    dropConsole = true,
+    target = 'es2020',
+    devtools = 'full',
+    ...manifest
+  } = options;
+
+  const resolvedFileName = fileName ?? `${kebabCase(manifest.title)}.html`;
+  if (!resolvedFileName.endsWith('.html') || /[\\/]/.test(resolvedFileName)) {
+    throw new Error(
+      `[srgb-effect] fileName must be a plain file name ending in .html (got "${resolvedFileName}")`,
+    );
+  }
+
+  return {
+    manifest,
+    typesFile,
+    fileName: resolvedFileName,
+    script,
+    dropConsole,
+    target,
+    devtools: resolveDevtools(devtools),
+  };
+}
+```
 
 `packages/srgb-effect-kit/src/vite/devtoolsEntry.ts`:
 ```ts
@@ -1773,26 +2285,32 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/**
- * Relative to this module: the built bundle (dist/vite → dist/devtools/index.js) when the plugin
- * runs from the package, then the TypeScript source (src/vite → src/devtools/index.ts) when it runs
- * from source, as in this repository's tests.
- */
-const CANDIDATES = ['../devtools/index.js', '../devtools/index.ts'];
+/** Devtools modes that load a bundle: `'minimal'` (the environment only) or `'full'`. */
+export type DevtoolsEntryMode = 'minimal' | 'full';
+
+/** File name of each mode's entry, in dist/devtools and in src/devtools. */
+const ENTRY_NAMES: Record<DevtoolsEntryMode, string> = { minimal: 'minimal', full: 'index' };
 
 /**
- * Absolute path of the devtools entry module.
+ * Absolute path of a devtools entry, relative to this module: the built bundle
+ * (dist/vite → dist/devtools/<name>.js) when the plugin runs from the package, then the TypeScript
+ * source (src/vite → src/devtools/<name>.ts) when it runs from source, as in this repository's tests.
+ * @param mode - `'minimal'` loads `minimal`, `'full'` loads `index`.
  * @param from - URL of the module to resolve from. @default import.meta.url
- * @throws Error when neither candidate exists.
+ * @throws Error when neither file exists.
  */
-export function resolveDevtoolsEntry(from: string = import.meta.url): string {
+export function resolveDevtoolsEntry(
+  mode: DevtoolsEntryMode,
+  from: string = import.meta.url,
+): string {
   const dir = path.dirname(fileURLToPath(from));
-  for (const candidate of CANDIDATES) {
-    const file = path.resolve(dir, candidate);
+  const name = ENTRY_NAMES[mode];
+  for (const extension of ['.js', '.ts']) {
+    const file = path.resolve(dir, '../devtools', name + extension);
     if (fs.existsSync(file)) return file;
   }
   throw new Error(
-    `[srgb-effect] devtools bundle not found next to ${dir}. Reinstall srgb-effect-kit, or set devtools: false.`,
+    `[srgb-effect] devtools bundle "${name}" not found next to ${dir}. Reinstall srgb-effect-kit, or set devtools: 'none'.`,
   );
 }
 ```
@@ -1807,8 +2325,7 @@ import {
   type DevtoolsConfig,
   type EffectManifest,
 } from '../shared';
-import { resolveDevtoolsEntry } from './devtoolsEntry';
-import type { DevtoolsOptions } from './options';
+import { resolveDevtoolsEntry, type DevtoolsEntryMode } from './devtoolsEntry';
 
 const RESOLVED_ID = `\0${DEVTOOLS_MODULE_ID}`;
 
@@ -1859,12 +2376,12 @@ export function canvasEventMiddleware(
 }
 
 /**
- * Serve-only plugin that injects the devtools before the effect's scripts and relays canvas API
- * events. `entry` overrides the devtools module path (tests).
+ * Serve-only plugin that injects the devtools entry for `mode` before the effect's scripts and
+ * relays canvas API events. `entry` overrides the entry module path (tests).
  */
 export function devtoolsPlugin(
   manifest: EffectManifest,
-  options: Required<DevtoolsOptions>,
+  options: { mode: DevtoolsEntryMode; fireChangedOnLoad: boolean },
   entry?: string,
 ): Plugin {
   const config: DevtoolsConfig = { manifest, fireChangedOnLoad: options.fireChangedOnLoad };
@@ -1874,14 +2391,14 @@ export function devtoolsPlugin(
     apply: 'serve',
     configResolved() {
       // Fail at startup, not on the first page load, when the bundle is missing.
-      resolvedEntry ??= resolveDevtoolsEntry();
+      resolvedEntry ??= resolveDevtoolsEntry(options.mode);
     },
     resolveId(id) {
       return id === DEVTOOLS_MODULE_ID ? RESOLVED_ID : undefined;
     },
     load(id) {
       if (id !== RESOLVED_ID) return undefined;
-      return devtoolsModuleCode(resolvedEntry ?? resolveDevtoolsEntry(), config);
+      return devtoolsModuleCode(resolvedEntry ?? resolveDevtoolsEntry(options.mode), config);
     },
     configureServer(server) {
       // Registered before Vite's own middlewares, so the path matches whatever `base` is.
@@ -1902,9 +2419,9 @@ export function devtoolsPlugin(
 }
 ```
 
-How the bundle path resolves:
-- **Built package** (examples via `workspace:*`, consumers via `node_modules`, butterchurn via a `file:` tarball): `dist/vite/index.js` → `dist/devtools/index.js`.
-- **Source** (this repo's vitest): `src/vite/devtoolsEntry.ts` → `src/devtools/index.ts`, which Vite transpiles on the fly.
+How each bundle path resolves:
+- **Built package** (examples via `workspace:*`, consumers via `node_modules`, butterchurn via a `file:` tarball): `dist/vite/index.js` → `dist/devtools/{index,minimal}.js`.
+- **Source** (this repo's vitest): `src/vite/devtoolsEntry.ts` → `src/devtools/{index,minimal}.ts`, which Vite transpiles on the fly.
 
 In both cases, Vite rewrites the virtual module's absolute import to `/@fs/<path>`. It serves that path even outside `server.fs.allow`, because it records resolved import ids as safe module paths.
 
@@ -1926,6 +2443,18 @@ import { devtoolsPlugin } from './devtoolsPlugin';
 2. Replace:
 
 ```ts
+export type { DevtoolsOptions, ResolvedOptions, SrgbEffectOptions } from './options';
+```
+
+with:
+
+```ts
+export type { DevtoolsMode, DevtoolsOptions, ResolvedOptions, SrgbEffectOptions } from './options';
+```
+
+3. Replace:
+
+```ts
  * `index.html`, warns about module-scoped change handlers, and makes `vite build` emit one
  * self-contained HTML file.
 ```
@@ -1937,7 +2466,7 @@ with:
  * the devtools, and makes `vite build` emit one self-contained HTML file.
 ```
 
-3. Replace:
+4. Replace:
 
 ```ts
   return [corePlugin(resolved), buildPlugin(resolved), moduleScopePlugin(resolved)];
@@ -1947,43 +2476,12 @@ with:
 
 ```ts
   const plugins = [corePlugin(resolved), buildPlugin(resolved), moduleScopePlugin(resolved)];
-  if (resolved.devtools) plugins.push(devtoolsPlugin(resolved.manifest, resolved.devtools));
+  const { mode, fireChangedOnLoad } = resolved.devtools;
+  if (mode !== 'none') plugins.push(devtoolsPlugin(resolved.manifest, { mode, fireChangedOnLoad }));
   return plugins;
 ```
 
-The docs in `packages/srgb-effect-kit/src/vite/options.ts` still say the drawer is not built. In that file, make these replacements:
-
-1. Replace:
-
-```ts
-/** Options for the dev-only devtools drawer (not built yet; the option is already accepted). */
-```
-
-with:
-
-```ts
-/** Options for the devtools that simulate SignalRGB in `vite` dev. */
-```
-
-2. Replace:
-
-```ts
-  /** Dev-only devtools drawer. @default true */
-  devtools?: boolean | DevtoolsOptions;
-```
-
-with:
-
-```ts
-  /**
-   * In `vite` dev, define SignalRGB's globals before effect code runs and add the devtools drawer
-   * (property controls, audio, screen, meters, canvas API, renderer simulation). Never part of the
-   * build. `false` serves the page without any of it. @default true
-   */
-  devtools?: boolean | DevtoolsOptions;
-```
-
-- [ ] **Step 4: Build the devtools bundle**
+- [ ] **Step 4: Build both devtools bundles**
 
 In `packages/srgb-effect-kit/tsdown.config.ts`, replace:
 
@@ -1997,9 +2495,18 @@ Replace:
 with:
 
 ```ts
+  // Internal entries, served to the browser by the plugin in dev and never exported. Separate
+  // configs keep each bundle self-contained, so 'minimal' never loads the drawer's code.
   {
-    // Internal entry: served to the browser by the plugin in dev, never exported.
     entry: { 'devtools/index': 'src/devtools/index.ts' },
+    platform: 'browser',
+    format: 'esm',
+    dts: false,
+    fixedExtension: false,
+    clean: false,
+  },
+  {
+    entry: { 'devtools/minimal': 'src/devtools/minimal.ts' },
     platform: 'browser',
     format: 'esm',
     dts: false,
@@ -2010,8 +2517,22 @@ with:
     entry: { 'vite/index': 'src/vite/index.ts' },
 ```
 
-Run: `pnpm --filter srgb-effect-kit build && ls packages/srgb-effect-kit/dist/devtools && grep -c '^import' packages/srgb-effect-kit/dist/devtools/index.js`
-Expected: `index.js` is listed, and the count is `0`, because the bundle is self-contained with shared/ and runtime/ inlined. `grep -c` exits with status 1 when it prints 0; that is expected here.
+Run:
+
+```bash
+pnpm --filter srgb-effect-kit build
+cd packages/srgb-effect-kit
+ls -l dist/devtools
+for f in dist/devtools/*.js; do
+  echo "$f imports=$(grep -c '^import' $f) host=$(grep -c 'srgb-effect-devtools' $f) css=$(grep -c ':host' $f) ua=$(grep -c 'Ultralight/' $f)"
+done
+cd ../..
+```
+
+Expected:
+- Both bundles exist. `minimal.js` is about 9 KB; `index.js` grows with later tasks, to about 77 KB by Task 11.
+- Both report `imports=0`.
+- `minimal.js` reports `host=0 css=0 ua=0`, now and after every later task.
 
 - [ ] **Step 5: Run the tests and checks**
 
@@ -2023,16 +2544,16 @@ Expected: all PASS.
 Run: `pnpm --filter @srgb-effect-kit-examples/basic-2d dev`, then open the printed URL.
 Expected:
 - the rainbow animates, and the console shows no `ReferenceError`;
-- `window.speed` is `25` in the console;
+- `window.speed` is `25`;
 - `curl -X POST "http://localhost:5173/canvas/event?sender=a&event=b"` (use the printed port) answers `204`.
 
-Stop the server.
+Then set `devtools: 'minimal'` in `examples/basic-2d/vite.config.ts` and restart. The page behaves the same, and the Network panel shows `minimal.js` instead of `index.js`. Revert the config.
 
 - [ ] **Step 7: Commit**
 
 ```bash
 git add packages/srgb-effect-kit
-git commit -m "feat(vite): inject the devtools in dev and relay POST /canvas/event" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -m "feat(vite): add devtools modes and inject the dev simulation" -m "devtools is now 'none' | 'minimal' | 'full' (or { mode, fireChangedOnLoad }); 'minimal' loads a separate bundle without any UI." -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -2043,18 +2564,22 @@ git commit -m "feat(vite): inject the devtools in dev and relay POST /canvas/eve
 **Files:**
 - Modify: `package.json` (root), `eslint.config.js`, `.gitignore`, `.github/workflows/ci.yml`, `pnpm-lock.yaml`
 - Create: `playwright.config.ts`, `e2e/helpers.ts`, `e2e/devtools.spec.ts`, `e2e/tsconfig.json`
+- Create: `e2e/fixtures/modes/vite.config.mjs`, `e2e/fixtures/modes/index.html`, `e2e/fixtures/modes/main.js`
 
 **Interfaces:**
 - Consumes:
   - From Tasks 1–2: the globals in dev, the load-time handler calls, and `POST /canvas/event`.
-  - `examples/basic-2d`, unchanged. It declares `speed` (number, default 25), `baseHue` (hue, 200), `rainbow` (boolean, true) and `mode` (list `Wave`/`Pulse`). It assigns only `window.onBaseHueChanged`, and reads `baseHue` at its top level.
+  - `examples/basic-2d`, unchanged, which runs in the default `'full'` mode. It declares `speed` (number, default 25), `baseHue` (hue, 200), `rainbow` (boolean, true) and `mode` (list `Wave`/`Pulse`). It assigns only `window.onBaseHueChanged`, and reads `baseHue` at its top level.
+  - From Task 2: the devtools modes, and the `dist/devtools/minimal.js` bundle.
 - Produces:
   - **Root scripts:** `pnpm test:e2e` (`playwright test`). `pnpm typecheck` also type-checks `e2e/`.
   - **`e2e/helpers.ts`:**
     - `recordHandlerCalls(page, names)` → `window.__handlerCalls`
     - `probeGlobalsAtUserStart(page, names)` → `window.__atUserStart`
     - `collectPageErrors(page)`
-    - `openEffect(page)`
+    - `openEffect(page, url = '/')`
+    - `MODE_PORTS = { minimal: 5311, none: 5312 }`
+  - **`e2e/fixtures/modes/`:** a one-property effect (`speed`, default 5). Its `vite.config.mjs` loads the **built** plugin by relative path and reads the mode from `SRGB_DEVTOOLS_MODE`. Playwright serves it twice, in `'minimal'` and `'none'` mode, with the `vite` binary of `basic-2d`. The fixture is not a workspace package.
   - **`e2e/devtools.spec.ts`:** later tasks append tests to it.
   - **CI job `e2e`**.
 
@@ -2111,14 +2636,15 @@ with:
 `playwright.config.ts`:
 ```ts
 import { defineConfig } from '@playwright/test';
+import { MODE_PORTS } from './e2e/helpers';
 
-/** Port of the basic-2d dev server the end-to-end tests drive. */
+/** Port of the basic-2d dev server (devtools 'full') the end-to-end tests drive. */
 const PORT = 5310;
 
 export default defineConfig({
   testDir: './e2e',
   timeout: 30_000,
-  // One dev server and one example: run serially so tests never share a page's storage.
+  // Shared dev servers: run serially so tests never race on a server's WebSocket broadcasts.
   workers: 1,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
@@ -2131,17 +2657,27 @@ export default defineConfig({
     launchOptions: process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {},
     trace: 'retain-on-failure',
   },
-  webServer: {
-    // Serves the example against the built package (packages/srgb-effect-kit/dist): build first.
-    command: `pnpm --dir examples/basic-2d exec vite --host 127.0.0.1 --port ${PORT} --strictPort`,
-    url: `http://127.0.0.1:${PORT}/`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
-  },
+  webServer: [
+    {
+      // Serves the example against the built package (packages/srgb-effect-kit/dist): build first.
+      command: `pnpm --dir examples/basic-2d exec vite --host 127.0.0.1 --port ${PORT} --strictPort`,
+      url: `http://127.0.0.1:${PORT}/`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+    },
+    // The same small fixture in the 'minimal' and 'none' devtools modes. Vite comes from basic-2d.
+    ...(['minimal', 'none'] as const).map((mode) => ({
+      command: `pnpm --dir examples/basic-2d exec vite --config ../../e2e/fixtures/modes/vite.config.mjs --host 127.0.0.1 --port ${MODE_PORTS[mode]} --strictPort`,
+      url: `http://127.0.0.1:${MODE_PORTS[mode]}/`,
+      env: { SRGB_DEVTOOLS_MODE: mode },
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+    })),
+  ],
 });
 ```
 
-`e2e/tsconfig.json`. The generated `srgb-effect.d.ts` of `basic-2d` types `window.speed` and the other globals in `page.evaluate` callbacks. It exists after `pnpm build` or `pnpm dev`, and CI runs the build before the typecheck.
+`e2e/tsconfig.json`. The generated `srgb-effect.d.ts` of `basic-2d` types `window.speed` and the other globals in `page.evaluate` callbacks. It exists after `pnpm build` or `pnpm dev`, and CI runs the build before the typecheck. The fixture is excluded, because its own generated `.d.ts` would declare a second `speed`.
 ```json
 {
   "extends": "../tsconfig.base.json",
@@ -2149,7 +2685,8 @@ export default defineConfig({
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["node"]
   },
-  "include": ["**/*.ts", "../playwright.config.ts", "../examples/basic-2d/src/srgb-effect.d.ts"]
+  "include": ["**/*.ts", "../playwright.config.ts", "../examples/basic-2d/src/srgb-effect.d.ts"],
+  "exclude": ["fixtures"]
 }
 ```
 
@@ -2165,8 +2702,13 @@ declare global {
     __atUserStart: Record<string, string | boolean>;
     /** Canvas API events the test's handler received. */
     __events: unknown[];
+    /** Calls of the modes fixture's `onSpeedChanged`. */
+    __speedCalls: number;
   }
 }
+
+/** Ports of the e2e/fixtures/modes dev servers, one per devtools mode ('full' is basic-2d). */
+export const MODE_PORTS = { minimal: 5311, none: 5312 } as const;
 
 /**
  * Records every call of the named handlers, whoever assigns them. The getter/setter pair defined
@@ -2220,16 +2762,66 @@ export function collectPageErrors(page: Page): string[] {
  * Opens the effect and waits for the load event (the devtools fire the load-time handlers and mount
  * the drawer on DOMContentLoaded, before it) and for Vite's WebSocket, which relays canvas events.
  */
-export async function openEffect(page: Page): Promise<void> {
+export async function openEffect(page: Page, url = '/'): Promise<void> {
   const connected = page.waitForEvent('console', (message) =>
     message.text().includes('[vite] connected'),
   );
-  await page.goto('/');
+  await page.goto(url);
   await connected;
 }
 ```
 
-- [ ] **Step 3: Write the end-to-end tests for Tasks 1–2**
+`e2e/fixtures/modes/vite.config.mjs`:
+```js
+// Serves this fixture with the devtools mode from SRGB_DEVTOOLS_MODE ('none' or 'minimal'). It
+// loads the built plugin directly, so run `pnpm build` first.
+import { srgbEffect } from '../../../packages/srgb-effect-kit/dist/vite/index.js';
+
+export default {
+  root: import.meta.dirname,
+  logLevel: 'warn',
+  plugins: [
+    srgbEffect({
+      title: 'Modes Fixture',
+      properties: [
+        { property: 'speed', type: 'number', label: 'Speed', min: 0, max: 10, default: 5 },
+      ],
+      devtools: process.env.SRGB_DEVTOOLS_MODE,
+    }),
+  ],
+};
+```
+
+`e2e/fixtures/modes/index.html`:
+```
+<!doctype html>
+<html>
+  <head></head>
+  <body>
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>
+```
+
+`e2e/fixtures/modes/main.js`. It reads the globals through `window`, so it runs in `'none'` mode too:
+```js
+// Reads globals through `window`, so it also runs when nothing defines them ('none').
+window.__atUserStart = {
+  speed: typeof window.speed,
+  engine: typeof window.engine,
+  onSpeedChanged: 'onSpeedChanged' in window,
+};
+window.__speedCalls = 0;
+window.onSpeedChanged = () => {
+  window.__speedCalls += 1;
+};
+window.__events = [];
+window.onCanvasApiEvent = (event) => window.__events.push(event);
+```
+
+Running the fixture writes `e2e/fixtures/modes/src/srgb-effect.d.ts`. The existing `srgb-effect.d.ts` pattern in `.gitignore` already ignores it.
+
+- [ ] **Step 3: Write the end-to-end tests for Tasks 1–2, including the three modes**
 
 `e2e/devtools.spec.ts`:
 ```ts
@@ -2239,6 +2831,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   collectPageErrors,
+  MODE_PORTS,
   openEffect,
   probeGlobalsAtUserStart,
   recordHandlerCalls,
@@ -2299,14 +2892,58 @@ test('leaves no devtools code in the build output', () => {
     expect(html).not.toContain(marker);
   }
 });
+
+test("devtools 'minimal' simulates SignalRGB without loading any devtools UI", async ({ page }) => {
+  const origin = `http://127.0.0.1:${MODE_PORTS.minimal}`;
+  const errors = collectPageErrors(page);
+  const requests: string[] = [];
+  page.on('request', (request) => requests.push(request.url()));
+  // Minimal mode ignores stored values: the globals always start at the defaults.
+  await page.addInitScript(() =>
+    localStorage.setItem('srgb-effect-kit:Modes Fixture:properties', JSON.stringify({ speed: 9 })),
+  );
+  await openEffect(page, `${origin}/`);
+  expect(await page.evaluate(() => window.__atUserStart)).toEqual({
+    speed: 'number',
+    engine: 'object',
+    onSpeedChanged: true,
+  });
+  await expect.poll(() => page.evaluate(() => window.__speedCalls)).toBe(1);
+  expect(await page.evaluate(() => window.speed)).toBe(5);
+  await expect(page.locator('srgb-effect-devtools')).toHaveCount(0);
+  expect(requests.some((url) => url.includes('/devtools/minimal.js'))).toBe(true);
+  expect(requests.some((url) => url.includes('/devtools/index.js'))).toBe(false);
+
+  const response = await page.request.post(`${origin}/canvas/event?sender=e2e&event=ping`);
+  expect(response.status()).toBe(204);
+  await expect
+    .poll(() => page.evaluate(() => window.__events))
+    .toEqual([{ sender: 'e2e', event: 'ping' }]);
+  expect(errors).toEqual([]);
+});
+
+test("devtools 'none' injects nothing", async ({ page }) => {
+  const origin = `http://127.0.0.1:${MODE_PORTS.none}`;
+  await openEffect(page, `${origin}/`);
+  expect(await page.evaluate(() => window.__atUserStart)).toEqual({
+    speed: 'undefined',
+    engine: 'undefined',
+    onSpeedChanged: false,
+  });
+  await expect(page.locator('srgb-effect-devtools')).toHaveCount(0);
+  const response = await page.request.post(`${origin}/canvas/event?sender=e2e&event=ping`);
+  expect(response.status()).toBe(404);
+});
 ```
 
 - [ ] **Step 4: Run them**
 
 Run: `pnpm build && CHROMIUM_PATH=/usr/bin/chromium pnpm test:e2e`. Without a system Chromium, run `pnpm exec playwright install chromium` once, then `pnpm test:e2e`.
-Expected: 4 passed.
+Expected: 6 passed. Playwright starts three dev servers, on ports 5310, 5311 and 5312.
 
-To confirm that the first test catches a regression, temporarily change `head-prepend` to `body` in `devtoolsPlugin.ts`, run `pnpm build && pnpm test:e2e`, and see it fail. Then revert the change and rebuild.
+To confirm the tests catch regressions:
+1. Temporarily change `head-prepend` to `body` in `devtoolsPlugin.ts`, run `pnpm build && pnpm test:e2e`, and see the first test fail. Revert the change.
+2. Temporarily map `minimal` to `'index'` in `ENTRY_NAMES` in `devtoolsEntry.ts`, rebuild, and see the `'minimal'` test fail on the bundle requests. Revert the change and rebuild.
 
 - [ ] **Step 5: Add the CI job**
 
@@ -2343,7 +2980,7 @@ Expected: all PASS. `pnpm typecheck` now also runs `tsc -p e2e`.
 
 ```bash
 git add package.json pnpm-lock.yaml .gitignore eslint.config.js .github/workflows/ci.yml playwright.config.ts e2e
-git commit -m "test: add Playwright end-to-end tests for the dev globals" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -m "test: add Playwright end-to-end tests for the dev globals and devtools modes" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -3683,14 +4320,14 @@ import type { RendererController } from './renderer';
 3. Replace:
 
 ```ts
-  readonly canvasApi: CanvasApiController;
+  readonly raf: FrameScheduler;
 }
 ```
 
 with:
 
 ```ts
-  readonly canvasApi: CanvasApiController;
+  readonly raf: FrameScheduler;
   readonly renderer: RendererController;
   readonly consoleCounter: ConsoleCounter;
 }
@@ -3701,33 +4338,21 @@ In `packages/srgb-effect-kit/src/devtools/index.ts`, make these replacements:
 1. Replace:
 
 ```ts
-import { createEngineMock } from './engine';
+import type { DevtoolsContext, FrameScheduler, StartOptions } from './context';
 ```
 
 with:
 
 ```ts
+import type { DevtoolsContext, FrameScheduler, StartOptions } from './context';
 import { installConsoleCounter } from './consoleCounter';
-import { createEngineMock } from './engine';
+import { installRendererSimulation } from './renderer';
 ```
 
 2. Replace:
 
 ```ts
-import { createPropertyController } from './properties';
-```
-
-with:
-
-```ts
-import { createPropertyController } from './properties';
-import { installRendererSimulation } from './renderer';
-```
-
-3. Replace:
-
-```ts
-  const properties = createPropertyController(
+  const simulation = startSimulation(config, win, storage, hot);
 ```
 
 with:
@@ -3736,26 +4361,22 @@ with:
   // Before effect code runs: it may read the user agent or start its loop at the top level.
   const renderer = installRendererSimulation(win, storage, raf);
   const consoleCounter = installConsoleCounter(win);
-  const properties = createPropertyController(
+  const simulation = startSimulation(config, win, storage, hot);
 ```
 
-4. Replace:
+3. Replace:
 
 ```ts
-  const context: DevtoolsContext = { config, win, storage, raf, properties, engine, canvasApi };
+  const context: DevtoolsContext = { ...simulation, storage, raf };
 ```
 
 with:
 
 ```ts
   const context: DevtoolsContext = {
-    config,
-    win,
+    ...simulation,
     storage,
     raf,
-    properties,
-    engine,
-    canvasApi,
     renderer,
     consoleCounter,
   };
@@ -4561,6 +5182,21 @@ In `packages/srgb-effect-kit/src/devtools/index.ts`, make these replacements:
 1. Replace:
 
 ```ts
+import { installConsoleCounter } from './consoleCounter';
+import { installRendererSimulation } from './renderer';
+```
+
+with:
+
+```ts
+import { installConsoleCounter } from './consoleCounter';
+import { onDomReady } from './lifecycle';
+import { installRendererSimulation } from './renderer';
+```
+
+2. Replace:
+
+```ts
 import { createStorage } from './storage';
 ```
 
@@ -4571,25 +5207,26 @@ import { createStorage } from './storage';
 import { mountUi } from './ui';
 ```
 
-2. Replace:
+3. Replace:
 
 ```ts
-    if (config.fireChangedOnLoad) properties.fireAll();
-  });
+  rememberInstance(win, context);
+  return context;
 ```
 
 with:
 
 ```ts
-    if (config.fireChangedOnLoad) properties.fireAll();
-    mountUi(context);
-  });
+  rememberInstance(win, context);
+  // Registered after the simulation's, so the drawer mounts after the load-time handler calls.
+  onDomReady(win, () => mountUi(context));
+  return context;
 ```
 
 - [ ] **Step 4: Run the tests and checks**
 
 Run: `pnpm --filter srgb-effect-kit test && pnpm --filter srgb-effect-kit typecheck && pnpm lint && pnpm format && pnpm build && CHROMIUM_PATH=/usr/bin/chromium pnpm test:e2e`
-Expected: all PASS, with 5 e2e tests.
+Expected: all PASS, with 7 e2e tests.
 
 - [ ] **Step 5: Look at it**
 
@@ -4961,7 +5598,7 @@ export const TABS: readonly TabDefinition[] = [propertiesTab];
 - [ ] **Step 3: Run the tests and checks**
 
 Run: `pnpm --filter srgb-effect-kit test && pnpm --filter srgb-effect-kit typecheck && pnpm lint && pnpm format && pnpm build && CHROMIUM_PATH=/usr/bin/chromium pnpm test:e2e`
-Expected: all PASS, with 7 e2e tests.
+Expected: all PASS, with 9 e2e tests.
 
 - [ ] **Step 4: Commit**
 
@@ -5501,26 +6138,27 @@ In `packages/srgb-effect-kit/src/devtools/index.ts`, make these replacements:
 1. Replace:
 
 ```ts
-import { createCanvasApi, toCanvasApiEvent } from './canvasApi';
+import type { DevtoolsConfig } from '../shared';
 ```
 
 with:
 
 ```ts
+import type { DevtoolsConfig } from '../shared';
 import { createAudioController, openAudioCapture } from './audioController';
-import { createCanvasApi, toCanvasApiEvent } from './canvasApi';
 ```
 
 2. Replace:
 
 ```ts
-  const canvasApi = createCanvasApi(win);
+  const simulation = startSimulation(config, win, storage, hot);
 ```
 
 with:
 
 ```ts
-  const canvasApi = createCanvasApi(win);
+  const simulation = startSimulation(config, win, storage, hot);
+  const { engine } = simulation;
   const audio = createAudioController(engine.audio, storage, raf, openAudioCapture);
 ```
 
@@ -5668,7 +6306,7 @@ export const TABS: readonly TabDefinition[] = [propertiesTab, audioTab];
 - [ ] **Step 4: Run the tests and checks**
 
 Run: `pnpm --filter srgb-effect-kit test && pnpm --filter srgb-effect-kit typecheck && pnpm lint && pnpm format && pnpm build && CHROMIUM_PATH=/usr/bin/chromium pnpm test:e2e`
-Expected: all PASS, with 8 e2e tests.
+Expected: all PASS, with 10 e2e tests.
 
 Then run `pnpm --filter @srgb-effect-kit-examples/audio-visualizer dev` and open it.
 Expected: in Audio → Random the bars move. In "System audio", sharing a tab that plays music with "Share audio" ticked drives the bars; stopping the share returns the mode to Silent.
@@ -7626,7 +8264,7 @@ export const TABS: readonly TabDefinition[] = [
 - [ ] **Step 3: Run everything**
 
 Run: `pnpm lint && pnpm format && pnpm build && pnpm typecheck && pnpm test && CHROMIUM_PATH=/usr/bin/chromium pnpm test:e2e`
-Expected: all PASS, with 8 e2e tests.
+Expected: all PASS, with 10 e2e tests.
 
 - [ ] **Step 4: Check the browser-only parts by hand**
 
@@ -7672,9 +8310,26 @@ In `pnpm dev`, `srgbEffect()` turns the browser into a stand-in for SignalRGB. Y
 
 Related: [Globals](globals.md) · [Configuration](configuration.md#options) · [SignalRGB notes](signalrgb-notes.md)
 
+## Modes
+
+The `devtools` option picks how much of SignalRGB `pnpm dev` simulates:
+
+| Mode | What you get in `pnpm dev` |
+|---|---|
+| `'full'` (default) | SignalRGB's environment plus the drawer and the visible-area marker. Everything on this page. |
+| `'minimal'` | SignalRGB's environment only: handler globals, property globals at their **defaults**, a silent `engine` mock, the load-time handler calls and `POST /canvas/event`. Nothing is shown, stored or simulated beyond that, and the drawer's code is not even loaded. |
+| `'none'` | Nothing. The page is served as is, so effect code that reads SignalRGB's globals throws a `ReferenceError`. |
+
+```ts
+srgbEffect({ title: 'My Effect', devtools: 'minimal' });
+srgbEffect({ title: 'My Effect', devtools: { mode: 'full', fireChangedOnLoad: false } });
+```
+
+A mode string means `{ mode, fireChangedOnLoad: true }`. The rest of this page describes `'full'`; the sections on loading and on the canvas API endpoint apply to `'minimal'` too.
+
 ## What happens when the page loads
 
-The plugin adds a module script at the start of `<head>`. Module scripts run in document order, so it runs before your code and, synchronously, does the following:
+The plugin adds a module script at the start of `<head>`. Module scripts run in document order, so it runs before your code and, synchronously, does the following (in `'minimal'`, only steps 1, 3 and 4, with defaults instead of stored values):
 
 1. Creates every `on<Prop>Changed` global and `onCanvasApiEvent`, set to `undefined`, like the build's prelude. A bare `onSpeedChanged = …` therefore works in dev too.
 2. Applies the [renderer simulation](#renderer) you last chose.
@@ -7699,8 +8354,6 @@ The exact order and timing of SignalRGB's load-time calls is not verified yet. T
 ```ts
 srgbEffect({ title: 'My Effect', devtools: { fireChangedOnLoad: false } });
 ```
-
-`devtools: false` removes the devtools entirely. The dev server then defines none of SignalRGB's globals, so effect code that reads them throws a `ReferenceError`.
 
 ## The visible area
 
@@ -7906,11 +8559,11 @@ with:
 In `pnpm dev`, the [devtools](devtools.md) define every global on this page before your code runs:
 - Property globals hold SignalRGB's raw format, starting from your defaults.
 - Every handler global exists, so a bare assignment works.
-- `engine` is a mock that the drawer drives.
+- `engine` is a mock.
 
-On `DOMContentLoaded`, the devtools call each `on<Prop>Changed` once, like SignalRGB does at load, and the drawer's controls call them on every change.
+On `DOMContentLoaded`, the devtools call each `on<Prop>Changed` once, like SignalRGB does at load. With the default `devtools: 'full'`, the drawer's controls change the globals and call the handlers on every change. `devtools: 'minimal'` keeps the globals at their defaults, with nothing on screen.
 
-With `devtools: false` none of this happens:
+With `devtools: 'none'` none of this happens:
 - reading a property global throws `ReferenceError`;
 - a bare handler assignment throws too;
 - `engine` is undefined.
@@ -7925,7 +8578,7 @@ With `devtools: false` none of this happens:
 with:
 
 ````markdown
-`srgbEffect()` validates `options` (see [Validation](#validation)) and returns the Vite plugins below; `srgb-effect:devtools` is left out when `devtools` is `false`. Put the returned array in Vite's `plugins` array as is; Vite flattens it.
+`srgbEffect()` validates `options` (see [Validation](#validation)) and returns the Vite plugins below; `srgb-effect:devtools` is left out when `devtools` is `'none'`. Put the returned array in Vite's `plugins` array as is; Vite flattens it.
 ````
 
 6. In `docs/configuration.md`, replace:
@@ -7938,7 +8591,7 @@ with:
 
 ````markdown
 - `srgb-effect:module-scope-check` warns about [module-scoped change handlers](globals.md#do-not-declare-handlers-at-module-scope).
-- `srgb-effect:devtools` runs only in `pnpm dev`. It defines SignalRGB's globals before your code, adds the [devtools drawer](devtools.md) and serves `POST /canvas/event`.
+- `srgb-effect:devtools` runs only in `pnpm dev`. It defines SignalRGB's globals before your code, serves `POST /canvas/event` and, in the default `'full'` mode, adds the [devtools drawer](devtools.md).
 ````
 
 7. In `docs/configuration.md`, replace:
@@ -7950,7 +8603,7 @@ with:
 with:
 
 ````markdown
-| `devtools`    | `boolean \| { fireChangedOnLoad?: boolean }` | `true`                      | SignalRGB simulation in `pnpm dev`. See [Devtools](devtools.md).                                          |
+| `devtools`    | `'none' \| 'minimal' \| 'full' \| { mode?, fireChangedOnLoad? }` | `'full'` | SignalRGB simulation in `pnpm dev`. See below and [Devtools](devtools.md#modes). |
 ````
 
 8. In `docs/configuration.md`, replace:
@@ -7962,14 +8615,15 @@ The devtools drawer is planned but not built yet. It will simulate property cont
 with:
 
 ````markdown
-In `pnpm dev`, the [devtools](devtools.md) define SignalRGB's globals before your code runs and add a drawer that simulates:
-- property controls;
-- audio;
-- screen zones and meters;
-- canvas API events;
-- renderers and frame rates.
+`devtools` picks one of three [modes](devtools.md#modes) for `pnpm dev`. None of them is ever part of the build.
 
-They also mark the visible 320×200 area. `fireChangedOnLoad` (default `true`) calls every `on<Prop>Changed` once at load, like SignalRGB does. `devtools: false` turns all of it off. The devtools are never part of the build.
+| Mode | Behaviour |
+|---|---|
+| `'full'` (default) | Defines SignalRGB's globals before your code runs, and adds a drawer that simulates property controls, audio, screen zones and meters, canvas API events, and renderers and frame rates. It also marks the visible 320×200 area. |
+| `'minimal'` | Defines the same globals (properties at their defaults), the `engine` mock and `POST /canvas/event`, with nothing visible. |
+| `'none'` | Injects nothing. |
+
+A string is shorthand for `{ mode }`. `fireChangedOnLoad` (default `true`) calls every `on<Prop>Changed` once at load, like SignalRGB does, in both `'minimal'` and `'full'`. The boolean form of earlier versions (`true`/`false`) is rejected with an error that lists these forms.
 ````
 
 9. In `docs/runtime-api.md`, replace:
@@ -8127,6 +8781,19 @@ with:
 - `pnpm dev`: develop in the browser. In the SRGB drawer, Audio → Random or System audio drives the bars.
 ````
 
+21. In `docs/configuration.md`, replace:
+
+````markdown
+- `DevtoolsOptions`: the object form of the `devtools` option, `{ fireChangedOnLoad?: boolean }`.
+````
+
+with:
+
+````markdown
+- `DevtoolsMode`: `'none' | 'minimal' | 'full'`, the string form of the `devtools` option.
+- `DevtoolsOptions`: the object form of the `devtools` option, `{ mode?: DevtoolsMode; fireChangedOnLoad?: boolean }`.
+````
+
 Then run: `grep -rn -i "not built yet\|until the devtools\|devtools land\|Plan 2\|no prelude" docs README.md packages/srgb-effect-kit/README.md examples/*/README.md`
 Expected: no output.
 
@@ -8139,18 +8806,29 @@ In `.superpowers/specs/2026-10-13-srgb-effect-kit-design.md`, replace the whole 
 
 Refined by Plan 2 (`.superpowers/plans/2026-10-15-srgb-effect-kit-devtools.md`). §10.6 lists what changed from the first version of this section.
 
-### 10.1 Injection and bootstrap
+### 10.1 Modes, injection and bootstrap
 
-- **The plugin.** In serve mode, the `srgb-effect:devtools` plugin (`apply: 'serve'`, omitted when `devtools: false`) does three things:
+- **Modes.** `devtools` is `'none' | 'minimal' | 'full'`, or `{ mode?, fireChangedOnLoad? }`. The default is `'full'`, and a string means `{ mode, fireChangedOnLoad: true }`. Each mode does the following in serve mode:
+  - `'none'` injects nothing: no prelude, globals, engine, relay or drawer.
+  - `'minimal'` fully simulates the SignalRGB environment, with nothing visible:
+    - the handler prelude;
+    - every property global at its manifest **default** (no localStorage, since nothing can change values);
+    - the `engine` mock;
+    - the load-time calls per `fireChangedOnLoad`;
+    - the `POST /canvas/event` relay.
+
+    It has no drawer, no marker, no renderer simulation (the renderer stays `browser`) and no console counter.
+  - `'full'` is `'minimal'` plus everything in §10.2–§10.4, with values persisted.
+- **The plugin.** In serve mode, the `srgb-effect:devtools` plugin (`apply: 'serve'`, omitted for `'none'`) does three things:
   - Injects `<script type="module" src="/@id/__x00__virtual:srgb-effect/devtools">` with `injectTo: 'head-prepend'` (`transformIndexHtml`, `order: 'pre'`). Vite prefixes `base`. Module scripts execute in document order, so the bootstrap runs before the effect's scripts. The core plugin still injects the §5.3 head markup, for parity with the build.
   - Serves the virtual module. It imports the devtools bundle by absolute path and calls `startDevtools(config, { hot: import.meta.hot })`. The config is `{ manifest, fireChangedOnLoad }`, inlined as JSON.
   - Serves `POST /canvas/event`, described in §10.4.
-- **The bundle.** It is an internal tsdown entry, `dist/devtools/index.js` (browser platform, self-contained, not exported). The plugin resolves it relative to its own module:
-  - `dist/vite/index.js` → `dist/devtools/index.js` when running from the package;
-  - `src/vite/` → `src/devtools/index.ts` when running from source in tests.
+- **The bundles.** There are two internal tsdown entries, built by separate configs so each is self-contained: `dist/devtools/index.js` (full) and `dist/devtools/minimal.js`. Both target the browser platform and neither is exported. `minimal.js` contains no drawer, tab, renderer or console-counter code. The plugin resolves the mode's bundle relative to its own module:
+  - `dist/vite/index.js` → `dist/devtools/{index,minimal}.js` when running from the package;
+  - `src/vite/` → `src/devtools/{index,minimal}.ts` when running from source in tests.
 
   Vite serves it through `/@fs/`. Resolved import ids are treated as safe, so this works from `node_modules`, workspaces and `file:` installs.
-- **The bootstrap.** Synchronously, at module top level, it does the following:
+- **The bootstrap.** The full entry, synchronously, at module top level, does the following. The minimal entry does steps 1, 4 and 5 (with defaults) and 7, through the same `startSimulation()`.
   1. Defines every `on<Prop>Changed` and `onCanvasApiEvent` global that does not exist (the prelude guarantee, from `handlerGlobalNames`).
   2. Applies the persisted renderer simulation: the user agent and, for UltraLight, the rAF throttle.
   3. Wraps the console for the Console tab.
@@ -8164,7 +8842,7 @@ Refined by Plan 2 (`.superpowers/plans/2026-10-15-srgb-effect-kit-devtools.md`).
 
   On `DOMContentLoaded`, it fires every `on<Prop>Changed` in property order if `fireChangedOnLoad` is set (the default), then mounts the drawer. `DOMContentLoaded` fires after all module scripts have executed; a microtask would fire before user code.
 - **Handler calls.** Handlers are called with no arguments and `this === window`. Errors go to `reportError`, and the remaining handlers still run.
-- **Storage.** localStorage keys are `srgb-effect-kit:<title>:<key>`, because all projects share the `localhost:5173` origin. The keys are `properties`, `drawer`, `audio`, `screen`, `meters`, `renderer` and `canvas-api`. Every read is validated.
+- **Storage** (full mode only). localStorage keys are `srgb-effect-kit:<title>:<key>`, because all projects share the `localhost:5173` origin. The keys are `properties`, `drawer`, `audio`, `screen`, `meters`, `renderer` and `canvas-api`. Every read is validated.
 - **Build output.** The devtools are never present in it. Both an integration test and an e2e test assert this.
 
 ### 10.2 Page rendering
@@ -8202,6 +8880,9 @@ See §11.
 
 ### 10.6 Changes from the first version of §10 (Plan 2, 2026-10-15)
 
+- **Devtools modes (decided 2026-10-15).** The boolean `devtools` option is replaced by `'none' | 'minimal' | 'full' | { mode, fireChangedOnLoad }`, with a default of `'full'`. `true`/`false` are rejected, because the package is pre-release.
+  - `'minimal'` is the SignalRGB environment with nothing visible and no persistence, served from its own small bundle.
+  - `ResolvedOptions.devtools` is `{ mode, fireChangedOnLoad }`.
 - **Manifest delivery.** There is no separate `virtual:srgb-effect/manifest` module. The single virtual module `virtual:srgb-effect/devtools` inlines the config and imports the bundle, and the bundle has no Vite dependency: `import.meta.hot` is passed in.
 - **Host placement.** The drawer host is appended to `<html>`, not `<body>`.
 - **Mount timing.** The drawer mounts on `DOMContentLoaded`, after the load-time handler calls.
@@ -8234,7 +8915,9 @@ with:
     - the console counter;
     - the audio and screen controllers, with fake capture sources.
   - jsdom tests also cover each drawer tab's DOM contract.
-  - The plugin side has integration tests: the injected tag and its base handling, the virtual module, the endpoint (204/405, encoding, base) and `devtools: false`. They also assert that the build contains no devtools code.
+  - Option resolution has unit tests: each mode, the string shorthand, and the rejection of booleans and unknown modes.
+  - The plugin side has integration tests: the injected tag and its base handling, the virtual module per mode (`minimal` imports `minimal.ts`, `full` imports `index.ts`), the endpoint (204/405, encoding, base) and `'none'` (no tag, no module, 404). They also assert that the build contains no devtools code.
+  - The minimal entry has jsdom tests: defaults even with stored values, the load-time calls, the relay, and no host, user agent, rAF or console changes.
 - **End-to-end:** Playwright (`@playwright/test`, Chromium) starts the `examples/basic-2d` dev server against the built package. It asserts the following:
   - globals exist before user code;
   - handlers fire on load and on control change;
@@ -8243,11 +8926,25 @@ with:
   - values persist across a reload;
   - the random audio mock writes `engine.audio`;
   - `POST /canvas/event` reaches `onCanvasApiEvent`;
-  - the build output contains no devtools code.
+  - the build output contains no devtools code;
+  - in `'minimal'` (a fixture project), globals and handlers work, values start at the defaults, `minimal.js` is loaded but never `index.js`, and there is no drawer host;
+  - in `'none'`, there are no globals and the endpoint is 404.
 
   The suite is a separate script, `pnpm test:e2e`. It is not compatibility testing in SignalRGB's own renderers (§13).
 - **CI:** build all examples as an end-to-end smoke test. A separate `e2e` job runs `pnpm build`, `pnpm exec playwright install --with-deps chromium` and `pnpm test:e2e`.
 ````
+
+In §5.1, replace:
+
+```markdown
+- `devtools?: boolean | { fireChangedOnLoad?: boolean }`. Default `true`; applies in serve mode only. `fireChangedOnLoad` defaults to `true`, which mirrors SignalRGB's load-time calls (§3.2).
+```
+
+with:
+
+```markdown
+- `devtools?: 'none' | 'minimal' | 'full' | { mode?: 'none' | 'minimal' | 'full'; fireChangedOnLoad?: boolean }`. Default `'full'`; applies in serve mode only (§10.1). A string means `{ mode, fireChangedOnLoad: true }`. `fireChangedOnLoad` defaults to `true`, which mirrors SignalRGB's load-time calls (§3.2). Decision 2026-10-15: modes replace the boolean form; `true`/`false` are rejected.
+```
 
 In §2, change the "Out of scope for v1" row's last item from `Playwright compat tests.` to `Playwright compat tests in those renderers (Playwright end-to-end tests of the dev-mode devtools in Chromium are in scope, §11).`
 
@@ -8259,6 +8956,7 @@ Run: `pnpm format:fix && pnpm lint && pnpm format`
 Expected: PASS. Prettier pads the Markdown tables.
 
 Read `docs/devtools.md` once more against the code. Check in particular:
+- the three modes, and that `'minimal'` keeps the defaults with nothing visible;
 - the storage keys;
 - the endpoint's status codes;
 - that only Silent and Random are restored;
