@@ -3,3 +3,4 @@ pnpm-lock.yaml
 **/*.generated.ts
 **/srgb-effect.d.ts
 docs/superpowers
+.superpowers

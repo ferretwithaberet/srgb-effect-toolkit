@@ -1,0 +1,107 @@
+# srgb-effect-kit
+
+Build [SignalRGB](https://signalrgb.com/) effects (Lightscripts) with Vite and TypeScript.
+
+- Declare the effect's metadata, controls and screen meters once, in `vite.config.ts`.
+- Get typed globals for every property and `on<Property>Changed` handler.
+- `vite build` produces one self-contained HTML file to drop into SignalRGB.
+
+## Setup
+
+```sh
+pnpm add -D srgb-effect-kit vite typescript
+```
+
+```ts
+// vite.config.ts
+import { srgbEffect } from 'srgb-effect-kit/vite';
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  plugins: [
+    srgbEffect({
+      title: 'My Effect',
+      description: 'What it does',
+      publisher: 'you',
+      properties: [
+        { property: 'speed', type: 'number', label: 'Speed', min: 0, max: 100, default: 50 },
+        {
+          property: 'mode',
+          type: 'list',
+          label: 'Mode',
+          values: ['Wave', 'Pulse'],
+          default: 'Wave',
+        },
+      ],
+    }),
+  ],
+});
+```
+
+`index.html` contains only your body: a canvas, other DOM, or nothing at all. Do not write `<title>` or SignalRGB `<meta>` tags; the plugin generates them.
+
+## Globals
+
+SignalRGB injects each property as a global and calls `on<Property>Changed` once at load and whenever the user changes the value.
+
+The plugin writes `src/srgb-effect.d.ts`, which types all of these. Commit it.
+
+```ts
+window.onSpeedChanged = () => console.log(speed); // speed: number
+```
+
+**Do not declare `function onSpeedChanged() {}` at the top of a module.** Module code is not global, so SignalRGB never calls it. The plugin warns when it finds one. Assign to `window` instead; bare assignment (`onSpeedChanged = …`) works too.
+
+## Options
+
+| Option                              | Default                     |                                                                                                       |
+| ----------------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `title`, `description`, `publisher` |                             | Effect metadata                                                                                       |
+| `properties`                        | `[]`                        | Controls, in UI order: `number`, `hue`, `boolean`, `color`, `textfield`, `list`                       |
+| `meters`                            | `[]`                        | Screen meters: `linear`, `area`, `ocr_textmatch`, `ocr_numeric`, with `resolutions`, `hdr` and `tags` |
+| `typesFile`                         | `src/srgb-effect.d.ts`      | Generated typings path                                                                                |
+| `fileName`                          | kebab-cased title + `.html` | Build output name                                                                                     |
+| `script`                            | `'classic'`                 | `'classic'` emits an IIFE in `<script>`; `'module'` emits `<script type="module">`                    |
+| `dropConsole`                       | `true`                      | Removes `console.*`. SignalRGB requires a clean console.                                              |
+| `target`                            | `'es2020'`                  | Build target                                                                                          |
+
+In the default classic mode, the build fails with an `[srgb-effect]` message on external imports (for example CDN URLs) and on top-level `await`. Set `script: 'module'` if you need either.
+
+## Utilities
+
+```ts
+import {
+  createLoop,
+  getCanvas,
+  hsl,
+  isSilent,
+  getFrequencies,
+  getZone,
+  createMeter,
+  detectRenderer,
+} from 'srgb-effect-kit';
+```
+
+| Area     | Exports                                                                                                 |
+| -------- | ------------------------------------------------------------------------------------------------------- |
+| Canvas   | `getCanvas({ id?, context? })`                                                                          |
+| Loop     | `createLoop(frame, { maxFps? })`, where `frame` receives `{ dt, time, frameCount }`                     |
+| Renderer | `detectRenderer()` returns `'ultralight' \| 'qtwebengine' \| 'browser'`; also `isSignalRGB()`           |
+| Audio    | `isSilent()`, `getFrequencies()`                                                                        |
+| Screen   | `getZone(x, y)` and `getZones()` over the 28×20 grid                                                    |
+| Meters   | `createMeter(size, callback)`, which debounces `engine.vision.<meter>` readings                         |
+| Color    | `hexToRgb`, `rgbToHex`, `rgbToHsl`, `hslToRgb`, `hexToHsl`, `hslToHex`, `hsl()`, `rgb()`, `lerpColor()` |
+| Booleans | `parseBoolean()`                                                                                        |
+
+`createLoop`'s `time` is rendered time: spans while the loop is paused are excluded. An invalid `maxFps` (non-finite or ≤ 0) disables the cap.
+
+## Renderers and frame rate
+
+SignalRGB renders effects with either UltraLight or QtWebEngine, chosen by the user.
+
+SignalRGB's FPS setting (20–60) is not exposed to effects:
+
+- UltraLight's `requestAnimationFrame` follows the setting.
+- QtWebEngine runs at 60 Hz while SignalRGB samples frames at the setting's rate.
+
+Only the top-left 320×200 of the page is shown.
