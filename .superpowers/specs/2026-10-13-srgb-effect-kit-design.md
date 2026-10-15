@@ -342,41 +342,44 @@ It then logs the output size.
 
 ## 9. Probe effect (`examples/probe`)
 
-A diagnostic effect built with the toolkit itself. It is loaded in SignalRGB inside the Windows VM, once per renderer, and at several FPS settings. It declares one property of every control type and one meter of every type.
+Revised 2026-10-16: the user chose a console-only probe and asked for a test-plan document. The dev-server endpoint, the saved result files and the paged on-screen report of the first version are dropped.
+
+A diagnostic effect built with the toolkit itself. It is loaded in real SignalRGB once per renderer (UltraLight, QtWebEngine), at several FPS settings. It declares one property of every control type (`pNumber`, `pHue`, `pBool`, `pColor`, `pText`, `pList`) and one meter of every type (`mLinear`, `mArea`, `mText`, `mNumber`). The manifest lives in `src/manifest.ts`, shared by two configs:
+
+- `vite.config.ts`: title `SRGB Probe`, `script: 'module'`, output `dist/probe.html`.
+- `vite.config.classic.ts`: title `SRGB Probe Classic`, `script: 'classic'`, output `dist/probe-classic.html`, `build.emptyOutDir: false`.
+
+Both set `dropConsole: false`, since the console is the probe's only output, and `target: 'es2015'`, so the probe itself runs on engines below the provisional `es2020` default. A build tag (`'module'` or `'classic'`) comes from `define` on `import.meta.env.PROBE_BUILD`.
 
 ### 9.1 What it records
 
-- **Environment:**
-  - `navigator.userAgent`
-  - `innerWidth`/`innerHeight`, `devicePixelRatio`
-  - A diff of global names against a clean-browser baseline that ships with the probe, to find undocumented injected globals.
-- **Properties:**
-  - `typeof` and raw value per control type.
-  - Whether and in what order `on<Prop>Changed` fires at load.
-  - Firing on each change, including per keystroke for `textfield`.
-- **Engine:**
-  - Deep shape of `engine`: keys, types, Array vs typed array, lengths.
-  - Rolling min/max for `audio.level`, `audio.width`, `audio.density` and `audio.freq`, including negative and garbage values.
-  - `zone` arrays.
-  - `vision.<meter>`, and whether bare meter globals exist.
-- **Timing:** measured rAF rate, the rAF timestamp argument, and the reported SignalRGB FPS setting (entered manually via a property).
-- **Features:**
-  - ES syntax level checks (via `new Function` probes).
-  - `type="module"` execution, as a separate variant build.
-  - WebGL1/2, OffscreenCanvas, Worker, AudioContext.
-  - `fetch` to the dev server.
-  - localStorage persistence across reloads.
-- **`onCanvasApiEvent`:** the full argument object, triggered by `curl -X POST "http://localhost:16034/canvas/event?sender=probe&event=test"` inside the VM.
+Each section is logged as soon as it is known:
+
+- **`start`** (immediately): `performance.now()`, `readyState`, URL and protocol, `document.currentScript` (null for modules), doctype, build tag.
+- **`env`:** user agent, platform, language, cores, inner/outer size, DPR, screen size, `compatMode`, visibility, focus, canvas client vs. backing size, `detectRenderer()`.
+- **`globals`:** names on `window` that a fresh `about:blank` iframe window lacks, each with its `typeof`. Without an iframe, a heuristic filter (no `on*`, `webkit*` or built-in constructors) marked `fallback`. Recomputed in each REPORT, to catch late injection.
+- **`properties`:** raw value, `typeof`, constructor and `in window` per property, and the `typeof` of each handler before the probe assigns it.
+- **`changed`** (live): the probe assigns every `on<Prop>Changed`. Each call logs the property, a sequence number, time, `readyState`, whether `DOMContentLoaded`/`load` have fired, the arguments, `this === window` and the raw value. **`canvas-event`** (live) logs the full `onCanvasApiEvent` payload, its keys and type. **`lifecycle`** logs `DOMContentLoaded` and `load`.
+- **`engine`:** the deep shape of `engine` to depth 4: `typeof`, constructor, `Array.isArray`, length and samples per key, plus whether `engine` is an own property of `window`.
+- **`meters`:** `engine.vision.<meter>` and whether each meter is also a bare global.
+- **`features`** (once the async checks settle): ES syntax checks via `new Function` (optional chaining through static blocks, BigInt, RegExp lookbehind and named groups, async generators, `for await`); `typeof` of a list of builtins and web APIs; WebGL 1/2 with version, unmasked renderer and max texture size; 2D canvas `filter`; a Blob-URL Worker (2 s timeout); `fetch` of a `data:` URL and of a network URL (3 s timeout); a localStorage counter that shows persistence across restarts.
+- **`timing`** (at 5 s): rAF count, average/min/max interval, Hz, timestamp type and monotonicity, first timestamp vs. `performance.now()`; actual `setInterval(…, 100)` period.
+- **`audio`** (at 5 s, sampled every frame): ranges of `level`, `width`, `density`; `freq` length, constructor, range, negative and non-finite counts, object identity reuse between frames, first sample; extra keys on `engine.audio`.
+- **`zone`** (at 5 s): length, constructor, range and sample of each channel.
+- **`REPORT`** (at 6 s, then every 30 s): every section plus the latest `changed` and `canvas-event` records, in one line.
+
+Every collector is wrapped: a failure logs `<section>-error {message, stack}` and the probe continues. Missing globals (a plain browser, `file://`) are reported as data, not errors.
 
 ### 9.2 How it reports
 
-1. A paged on-screen report within 320×200; a `list` property selects the page.
-2. A JSON dump to the console (SignalRGB console panel).
-3. If a `textfield` property holds the dev server URL, a `POST` to `/__srgb-effect/probe` on the Vite dev server. The server saves the result to `probe-results/<renderer>-<ISO date>.json`. The VM reaches the host through its NAT gateway IP.
+- **Console only.** Every line is `[probe] <section> <json>`, one line each. The serializer never throws: typed arrays and arrays over 64 entries become length plus a 16-value sample, functions become `'function'`, `NaN`/`Infinity` become strings, cycles become `'[cycle]'`, depth is limited to 4.
+- **Canvas status.** The 320×200 canvas shows the title, build tag, `detectRenderer()`, the measured Hz, when the report was logged and the `changed`/`canvas-event` counts, redrawn every second. It confirms the probe is alive; the data is in the console.
+- **Test plan.** `examples/probe/TEST-PLAN.md` is the protocol for the user: build and install, where to read the console, a run checklist (U1–U6 for UltraLight, Q1–Q6 for QtWebEngine: FPS 60/30/20, silence, the classic build, a restart for storage persistence, control changes and a `curl` canvas API event), what to send back, and troubleshooting. The user copies the `[probe]` lines of each run and hands them back.
+- Not covered by this version: the no-doctype variant (§8.2). Both builds keep the standard doctype.
 
 ### 9.3 Where findings go
 
-Findings are recorded in `docs/probe-findings.md` and feed into:
+Findings are recorded in `docs/probe-findings.md`, written later from the `[probe]` lines the user sends back, and feed into:
 
 - `detectRenderer` signatures
 - the default `target` and `script`
