@@ -108,7 +108,7 @@ From live audio:
 
 A capture mode is never restored after a reload, because it needs a click: choosing Microphone or System audio stores Silent. Only Silent and Random come back.
 
-A capture that fails falls back to Silent and shows the reason as text in the tab. That covers a denied permission, no audio shared (**Share audio** unticked), the share being stopped, and an error while reading the audio.
+A capture that fails falls back to Silent and shows the reason as text in the tab. That covers a denied permission, no audio shared (**Share audio** unticked), and an error while reading the audio. When you stop sharing, the tab also goes back to Silent and shows `Audio capture ended.`.
 
 ### Screen
 
@@ -122,7 +122,7 @@ Writes `engine.zone`, the 28×20 grid:
 
 The preview shows the grid. During a capture, it shows the captured frame with each `linear` and `area` meter's region outlined. Zone values use hue 0–360 and saturation and lightness 0–100. That scale is not verified on SignalRGB yet.
 
-Like audio, a capture is never restored after a reload; only Solid color and Gradient are. When a capture fails (permission denied, no video shared, a read error) or the share is stopped, the tab goes back to the previous Solid color or Gradient, or to black, and shows the reason as text. A browser that exposes no `navigator.mediaDevices`, such as a page opened over plain `http` from another machine on your network, reports `[srgb-effect] screen capture needs a secure context (https or localhost)`.
+Like audio, a capture is never restored after a reload; only Solid color and Gradient are. When a capture fails (permission denied, no video shared, a read error) the tab goes back to the previous Solid color or Gradient, or to black, and shows the reason as text. When you stop the share, it goes back the same way and shows `Screen capture ended.`. A browser that exposes no `navigator.mediaDevices`, such as a page opened over plain `http` from another machine on your network, reports `[srgb-effect] screen capture needs a secure context (https or localhost)`.
 
 ### Meters
 

@@ -89,10 +89,11 @@ export function createAudioController(
     frame();
   };
 
-  const setMode = async (next: AudioMode) => {
+  /** `notice` is a plain status message shown instead of an error, e.g. when a share ended. */
+  const setMode = async (next: AudioMode, notice?: string) => {
     const current = (generation += 1);
     stop();
-    error = undefined;
+    error = notice;
     mode = next;
     // Capture modes persist silent: a reload must not restore a stale random mode.
     storage.write(STORAGE_KEY, { mode: RESTORABLE.includes(next) ? next : 'silent' });
@@ -104,7 +105,7 @@ export function createAudioController(
 
     try {
       const capture = await openCapture(next, () => {
-        if (current === generation) void setMode('silent');
+        if (current === generation) void setMode('silent', 'Audio capture ended.');
       });
       // A newer setMode() call won the race: drop this capture.
       if (current !== generation) {

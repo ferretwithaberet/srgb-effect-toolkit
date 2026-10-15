@@ -185,11 +185,12 @@ export function createScreenController(
     if (capture === opened) frameId = raf.request(tick);
   };
 
-  const setSource = async (next: ScreenSource) => {
+  /** `notice` is a plain status message shown instead of an error, e.g. when a share ended. */
+  const setSource = async (next: ScreenSource, notice?: string) => {
     const current = (generation += 1);
     const previous = source.kind === 'capture' ? DEFAULT_SCREEN_SOURCE : source;
     stopCapture();
-    error = undefined;
+    error = notice;
     source = next;
     if (next.kind !== 'capture') {
       storage.write(SOURCE_KEY, next);
@@ -203,7 +204,7 @@ export function createScreenController(
     notify();
     try {
       const opened = await openCapture(() => {
-        if (current === generation) void setSource(previous);
+        if (current === generation) void setSource(previous, 'Screen capture ended.');
       });
       if (current !== generation) {
         opened.stop();

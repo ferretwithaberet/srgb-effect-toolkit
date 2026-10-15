@@ -165,7 +165,7 @@ describe('createScreenController', () => {
     expect(controller.source).toEqual({ kind: 'solid', color: '#123456' });
     expect(stop).toHaveBeenCalledOnce();
     expect(pending()).toBe(0);
-    expect(controller.error).toBeUndefined();
+    expect(controller.error).toBe('Screen capture ended.');
     expect(controller.frame).toBeUndefined();
 
     const failing = setup(async () => {

@@ -132,6 +132,7 @@ describe('createAudioController', () => {
     expect(controller.mode).toBe('silent');
     expect(source.stop).toHaveBeenCalledOnce();
     expect(pending()).toBe(0);
+    expect(controller.error).toBe('Audio capture ended.');
   });
 
   it('writes silence and persists silent while a capture prompt is open', async () => {
