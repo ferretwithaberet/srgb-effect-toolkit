@@ -14,3 +14,8 @@ srgbEffect({
     { property: 'mode', type: 'list', label: 'Mode', values: ['A', 'B'], default: 'C' },
   ],
 });
+
+srgbEffect({ title: 'X', devtools: 'minimal' });
+srgbEffect({ title: 'X', devtools: { mode: 'none', fireChangedOnLoad: false } });
+// @ts-expect-error the boolean form was replaced by modes
+srgbEffect({ title: 'X', devtools: false });

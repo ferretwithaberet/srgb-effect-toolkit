@@ -1,4 +1,5 @@
 import type { DevtoolsConfig } from '../shared';
+import type { CanvasApiController } from './canvasApi';
 import type { MockEngine } from './engine';
 import type { PropertyController } from './properties';
 import type { DevtoolsStorage } from './storage';
@@ -31,6 +32,7 @@ export interface SimulationContext {
   readonly win: DevtoolsWindow;
   readonly properties: PropertyController;
   readonly engine: MockEngine;
+  readonly canvasApi: CanvasApiController;
 }
 
 /** Everything the `full` bootstrap creates; the drawer's tabs read and drive it. */

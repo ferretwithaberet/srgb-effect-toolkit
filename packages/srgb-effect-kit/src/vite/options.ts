@@ -1,10 +1,23 @@
 import { kebabCase, type EffectManifest } from '../shared';
 
-/** Options for the dev-only devtools drawer (not built yet; the option is already accepted). */
+/**
+ * How much of SignalRGB `vite` dev simulates:
+ * - `'none'`: nothing; the page is served as is.
+ * - `'minimal'`: SignalRGB's environment only (handler and property globals at their defaults,
+ *   the `engine` mock, load-time handler calls, `POST /canvas/event`), with nothing visible.
+ * - `'full'`: the minimal environment plus the devtools drawer and its simulations.
+ */
+export type DevtoolsMode = 'none' | 'minimal' | 'full';
+
+/** Object form of the `devtools` option. */
 export interface DevtoolsOptions {
+  /** @default 'full' */
+  mode?: DevtoolsMode;
   /** Call every on<Prop>Changed once at load, like SignalRGB does. @default true */
   fireChangedOnLoad?: boolean;
 }
+
+const DEVTOOLS_MODES: readonly DevtoolsMode[] = ['none', 'minimal', 'full'];
 
 /** Options for `srgbEffect()`: the effect manifest plus build settings. */
 export interface SrgbEffectOptions extends EffectManifest {
@@ -33,8 +46,12 @@ export interface SrgbEffectOptions extends EffectManifest {
   dropConsole?: boolean;
   /** Build target. Provisional until probed. @default 'es2020' */
   target?: string | string[];
-  /** Dev-only devtools drawer. @default true */
-  devtools?: boolean | DevtoolsOptions;
+  /**
+   * SignalRGB simulation in `vite` dev, never part of the build: a mode (`'none'`, `'minimal'` or
+   * `'full'`, see {@link DevtoolsMode}) or `{ mode, fireChangedOnLoad }`. A string means
+   * `{ mode, fireChangedOnLoad: true }`. @default 'full'
+   */
+  devtools?: DevtoolsMode | DevtoolsOptions;
 }
 
 /** `SrgbEffectOptions` with defaults applied, split into the manifest and plugin settings. */
@@ -45,12 +62,27 @@ export interface ResolvedOptions {
   script: 'classic' | 'module';
   dropConsole: boolean;
   target: string | string[];
-  devtools: false | Required<DevtoolsOptions>;
+  devtools: Required<DevtoolsOptions>;
+}
+
+/** Resolves the `devtools` option, rejecting anything but a mode or the object form. */
+function resolveDevtools(devtools: unknown): Required<DevtoolsOptions> {
+  const options: unknown = typeof devtools === 'string' ? { mode: devtools } : devtools;
+  if (typeof options === 'object' && options !== null) {
+    const { mode = 'full', fireChangedOnLoad = true } = options as DevtoolsOptions;
+    if (DEVTOOLS_MODES.includes(mode) && typeof fireChangedOnLoad === 'boolean') {
+      return { mode, fireChangedOnLoad };
+    }
+  }
+  throw new Error(
+    `[srgb-effect] devtools must be 'none', 'minimal', 'full' or { mode, fireChangedOnLoad } (got ${JSON.stringify(devtools)})`,
+  );
 }
 
 /**
  * Applies defaults and splits plugin settings from the manifest.
- * @throws Error when `fileName` does not end in `.html` or contains a path separator.
+ * @throws Error when `fileName` does not end in `.html` or contains a path separator, or when
+ * `devtools` is not a mode or `{ mode?, fireChangedOnLoad? }` (for example the old `true`/`false`).
  */
 export function resolveOptions(options: SrgbEffectOptions): ResolvedOptions {
   const {
@@ -59,7 +91,7 @@ export function resolveOptions(options: SrgbEffectOptions): ResolvedOptions {
     script = 'module',
     dropConsole = true,
     target = 'es2020',
-    devtools = true,
+    devtools = 'full',
     ...manifest
   } = options;
 
@@ -77,11 +109,6 @@ export function resolveOptions(options: SrgbEffectOptions): ResolvedOptions {
     script,
     dropConsole,
     target,
-    devtools:
-      devtools === false
-        ? false
-        : {
-            fireChangedOnLoad: (devtools === true ? undefined : devtools.fireChangedOnLoad) ?? true,
-          },
+    devtools: resolveDevtools(devtools),
   };
 }

@@ -10,7 +10,7 @@ describe('resolveOptions', () => {
       script: 'module',
       dropConsole: true,
       target: 'es2020',
-      devtools: { fireChangedOnLoad: true },
+      devtools: { mode: 'full', fireChangedOnLoad: true },
     });
   });
 
@@ -27,7 +27,7 @@ describe('resolveOptions', () => {
       script: 'classic',
       dropConsole: false,
       target: ['chrome100', 'safari15'],
-      devtools: { fireChangedOnLoad: false },
+      devtools: { mode: 'minimal', fireChangedOnLoad: false },
     });
     expect(resolved).toMatchObject({
       typesFile: 'types/effect.d.ts',
@@ -35,12 +35,41 @@ describe('resolveOptions', () => {
       script: 'classic',
       dropConsole: false,
       target: ['chrome100', 'safari15'],
-      devtools: { fireChangedOnLoad: false },
+      devtools: { mode: 'minimal', fireChangedOnLoad: false },
     });
-    expect(resolveOptions({ title: 'X', devtools: false }).devtools).toBe(false);
-    expect(resolveOptions({ title: 'X', devtools: {} }).devtools).toEqual({
+  });
+
+  it('resolves the devtools mode from a string or the object form', () => {
+    expect(resolveOptions({ title: 'X', devtools: 'none' }).devtools).toEqual({
+      mode: 'none',
       fireChangedOnLoad: true,
     });
+    expect(resolveOptions({ title: 'X', devtools: 'minimal' }).devtools).toEqual({
+      mode: 'minimal',
+      fireChangedOnLoad: true,
+    });
+    expect(resolveOptions({ title: 'X', devtools: {} }).devtools).toEqual({
+      mode: 'full',
+      fireChangedOnLoad: true,
+    });
+    expect(resolveOptions({ title: 'X', devtools: { fireChangedOnLoad: false } }).devtools).toEqual(
+      { mode: 'full', fireChangedOnLoad: false },
+    );
+  });
+
+  it('rejects the old boolean form and unknown modes', () => {
+    for (const devtools of [
+      true,
+      false,
+      'off',
+      { mode: 'max' },
+      { fireChangedOnLoad: 'yes' },
+      null,
+    ]) {
+      expect(() => resolveOptions({ title: 'X', devtools } as never)).toThrow(
+        /\[srgb-effect\] devtools must be 'none', 'minimal', 'full' or \{ mode, fireChangedOnLoad \}/,
+      );
+    }
   });
 
   it('rejects file names that are not plain .html files', () => {

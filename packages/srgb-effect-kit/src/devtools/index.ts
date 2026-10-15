@@ -11,7 +11,7 @@ export type { DevtoolsContext, StartOptions } from './context';
  * callbacks runs synchronously, so the effect's top-level code already sees SignalRGB's globals.
  */
 export function startDevtools(config: DevtoolsConfig, options: StartOptions = {}): DevtoolsContext {
-  const { win = window } = options;
+  const { hot, win = window } = options;
   const existing = findInstance<DevtoolsContext>(win);
   if (existing) return existing;
 
@@ -20,7 +20,7 @@ export function startDevtools(config: DevtoolsConfig, options: StartOptions = {}
     request: win.requestAnimationFrame.bind(win),
     cancel: win.cancelAnimationFrame.bind(win),
   };
-  const simulation = startSimulation(config, win, storage);
+  const simulation = startSimulation(config, win, storage, hot);
 
   const context: DevtoolsContext = { ...simulation, storage, raf };
   rememberInstance(win, context);

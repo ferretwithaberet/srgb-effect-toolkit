@@ -2,10 +2,11 @@ import type { Plugin } from 'vite';
 import { assertValidManifest, type PropertyDef } from '../shared';
 import { buildPlugin } from './buildPlugin';
 import { corePlugin } from './corePlugin';
+import { devtoolsPlugin } from './devtoolsPlugin';
 import { moduleScopePlugin } from './moduleScopePlugin';
 import { resolveOptions, type SrgbEffectOptions } from './options';
 
-export type { DevtoolsOptions, ResolvedOptions, SrgbEffectOptions } from './options';
+export type { DevtoolsMode, DevtoolsOptions, ResolvedOptions, SrgbEffectOptions } from './options';
 export type * from '../shared/types';
 
 type CheckListDefault<P> = P extends { type: 'list'; values: readonly (infer V)[] }
@@ -20,8 +21,8 @@ export type CheckedProperties<P extends readonly PropertyDef[]> = P & {
 /**
  * Vite plugin that turns a Vite project into a SignalRGB effect. It validates the options, writes
  * the globals typings file (`typesFile`), injects the generated `<title>` and `<meta>` tags into
- * `index.html`, warns about module-scoped change handlers, and makes `vite build` emit one
- * self-contained HTML file.
+ * `index.html`, warns about module-scoped change handlers, simulates SignalRGB in `vite` dev with
+ * the devtools, and makes `vite build` emit one self-contained HTML file.
  *
  * @throws Error `[srgb-effect] Invalid effect manifest:` followed by every issue found, or a
  * `fileName` error.
@@ -44,5 +45,8 @@ export function srgbEffect<const P extends readonly PropertyDef[] = readonly []>
   // Validate first: untyped configs must get manifest issues, not a TypeError from resolveOptions.
   assertValidManifest(options);
   const resolved = resolveOptions(options);
-  return [corePlugin(resolved), buildPlugin(resolved), moduleScopePlugin(resolved)];
+  const plugins = [corePlugin(resolved), buildPlugin(resolved), moduleScopePlugin(resolved)];
+  const { mode, fireChangedOnLoad } = resolved.devtools;
+  if (mode !== 'none') plugins.push(devtoolsPlugin(resolved.manifest, { mode, fireChangedOnLoad }));
+  return plugins;
 }

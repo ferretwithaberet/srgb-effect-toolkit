@@ -84,6 +84,18 @@ describe('startDevtools', () => {
     expect(handler).toHaveBeenCalledOnce();
   });
 
+  it('relays canvas events from the dev server to onCanvasApiEvent', () => {
+    const listeners = new Map<string, (data: unknown) => void>();
+    start(CONFIG, { hot: { on: (event, listener) => listeners.set(event, listener) } });
+    const handler = vi.fn();
+    window.onCanvasApiEvent = handler;
+    const relay = listeners.get('srgb-effect:canvas-event')!;
+    relay({ sender: 'game', event: 'hit' });
+    relay({ nonsense: true });
+    expect(handler).toHaveBeenCalledOnce();
+    expect(handler).toHaveBeenCalledWith({ sender: 'game', event: 'hit' });
+  });
+
   it('returns the existing context when started twice', () => {
     const first = start();
     const second = start({ ...CONFIG, manifest: { title: 'Other' } });
