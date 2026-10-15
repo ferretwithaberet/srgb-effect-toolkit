@@ -1,3 +1,4 @@
+export * from './devtoolsProtocol';
 export * from './html';
 export * from './names';
 export * from './prelude';

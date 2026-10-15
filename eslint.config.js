@@ -21,6 +21,8 @@ const nodeBuiltins = (message) =>
   builtinModules.filter((name) => !name.startsWith('node:')).map((name) => ({ name, message }));
 const RUNTIME_MESSAGE = 'runtime/ ships inside effects: no Node, Vite or devtools imports.';
 const SHARED_MESSAGE = 'shared/ is isomorphic: no Node, Vite, runtime or devtools imports.';
+const DEVTOOLS_MESSAGE = 'devtools/ runs in the browser: no Node or Vite imports.';
+const VITE_MESSAGE = 'vite/ runs in Node: load devtools/ through the dev server, never import it.';
 
 export default defineConfig(
   { ignores: ['**/dist/**', '**/node_modules/**', '**/*.d.ts', '**/*.generated.ts'] },
@@ -50,6 +52,32 @@ export default defineConfig(
             { group: [...NODE_AND_VITE, '**/runtime', '**/runtime/**'], message: SHARED_MESSAGE },
           ],
         },
+      ],
+    },
+  },
+  {
+    files: ['packages/srgb-effect-kit/src/devtools/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: nodeBuiltins(DEVTOOLS_MESSAGE),
+          patterns: [
+            {
+              group: ['node:*', 'vite', 'vite/*', '**/vite', '**/vite/**'],
+              message: DEVTOOLS_MESSAGE,
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['packages/srgb-effect-kit/src/vite/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        { patterns: [{ group: ['**/devtools', '**/devtools/**'], message: VITE_MESSAGE }] },
       ],
     },
   },
