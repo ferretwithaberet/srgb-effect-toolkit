@@ -129,3 +129,32 @@ test('opens and closes the drawer', async ({ page }) => {
   await page.locator('[data-srgb-devtools="close"]').click();
   await expect(panel).toBeHidden();
 });
+
+test('controls set the globals and call the change handler', async ({ page }) => {
+  await recordHandlerCalls(page, ['onBaseHueChanged']);
+  await openEffect(page);
+  await page.locator('[data-srgb-devtools="toggle"]').click();
+  await page.locator('[data-srgb-control="speed"]').fill('80');
+  await page.locator('[data-srgb-control="baseHue"]').fill('10');
+  await page.locator('[data-srgb-control="rainbow"]').uncheck();
+  await page.locator('[data-srgb-control="mode"]').selectOption('Pulse');
+  expect(
+    await page.evaluate(() => [window.speed, window.baseHue, window.rainbow, window.mode]),
+  ).toEqual([80, 10, '0', 'Pulse']);
+  await expect
+    .poll(() => page.evaluate(() => window.__handlerCalls))
+    .toEqual(['onBaseHueChanged', 'onBaseHueChanged']);
+});
+
+test('keeps property values and drawer state across reloads', async ({ page }) => {
+  await openEffect(page);
+  await page.locator('[data-srgb-devtools="toggle"]').click();
+  await page.locator('[data-srgb-control="speed"]').fill('80');
+  await page.locator('[data-srgb-control="mode"]').selectOption('Pulse');
+  await page.reload();
+  await page.locator('[data-srgb-devtools="panel"]').waitFor();
+  expect(await page.evaluate(() => [window.speed, window.mode])).toEqual([80, 'Pulse']);
+  await expect(page.locator('[data-srgb-control="speed"]')).toHaveValue('80');
+  await page.locator('[data-srgb-devtools="reset-properties"]').click();
+  expect(await page.evaluate(() => window.speed)).toBe(25);
+});
