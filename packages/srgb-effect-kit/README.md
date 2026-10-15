@@ -63,11 +63,17 @@ window.onCanvasApiEvent = ({ sender, event }) => {};
 
 `engine` is typed as `SRGBEngine` (`audio`, `zone`, and `vision`, whose `SRGBVision` interface gains one key per meter). It only exists inside SignalRGB, so guard it (`globalThis.engine?.audio`) in code that also runs in a plain browser. The `SRGBEngine`, `EngineAudio`, `EngineZone`, `CanvasApiEvent` and `SRGBBoolean` types are also exported from `srgb-effect-kit`.
 
-Keep `src/srgb-effect.d.ts` inside your tsconfig `include`. `typesFile` is relative to the Vite root.
+Keep `src/srgb-effect.d.ts` inside your tsconfig `include`. `typesFile` is relative to the Vite root. The plugin rewrites the file whenever the options change, so add it to your formatter's ignore list, for example in `.prettierignore`:
+
+```
+src/srgb-effect.d.ts
+```
 
 Boolean properties arrive as raw `SRGBBoolean` (`'0' | '1'`, provisional until verified on real SignalRGB). Use `parseBoolean()` for them.
 
-**Do not declare `function onSpeedChanged() {}` or `const onSpeedChanged = …` at the top of a module.** Module code is not global, so SignalRGB never calls it. The plugin warns when it finds one. Assign to `window` instead; bare assignment (`onSpeedChanged = …`) works too.
+**Do not declare `function onSpeedChanged() {}` or `const onSpeedChanged = …` at the top of a module.** Module code is not global, so SignalRGB never calls it. The plugin warns when it finds one. Assign to `window` instead.
+
+A bare `onSpeedChanged = …` also works in the built effect, where a small prelude makes every handler global exist before your code runs. `vite dev` has no prelude and no property globals yet; they arrive with the devtools. Until then, a bare handler assignment or a top-level read such as `let current = speed` throws a `ReferenceError` in the browser and only works inside SignalRGB.
 
 ## Devtools
 
@@ -75,18 +81,20 @@ A dev-only in-browser devtools drawer is coming. It will cover property controls
 
 ## Options
 
-| Option                              | Default                     | Description                                                                                           |
-| ----------------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `title`, `description`, `publisher` |                             | Effect metadata                                                                                       |
-| `properties`                        | `[]`                        | Controls, in UI order: `number`, `hue`, `boolean`, `color`, `textfield`, `list`                       |
-| `meters`                            | `[]`                        | Screen meters: `linear`, `area`, `ocr_textmatch`, `ocr_numeric`, with `resolutions`, `hdr` and `tags` |
-| `typesFile`                         | `src/srgb-effect.d.ts`      | Generated typings path                                                                                |
-| `fileName`                          | kebab-cased title + `.html` | Build output name                                                                                     |
-| `script`                            | `'classic'`                 | `'classic'` emits an IIFE in `<script>`; `'module'` emits `<script type="module">`                    |
-| `dropConsole`                       | `true`                      | Removes `console.*`. SignalRGB requires a clean console.                                              |
-| `target`                            | `'es2020'`                  | Build target                                                                                          |
+| Option                              | Default                     | Description                                                                                                    |
+| ----------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `title`, `description`, `publisher` |                             | Effect metadata                                                                                                |
+| `properties`                        | `[]`                        | Controls, in UI order: `number`, `hue`, `boolean`, `color`, `textfield`, `list`                                |
+| `meters`                            | `[]`                        | Screen meters: `linear`, `area`, `ocr_textmatch`, `ocr_numeric`, with `resolutions`, `hdr` and `tags`          |
+| `typesFile`                         | `src/srgb-effect.d.ts`      | Generated typings path                                                                                         |
+| `fileName`                          | kebab-cased title + `.html` | Build output name                                                                                              |
+| `script`                            | `'classic'`                 | `'classic'` emits an IIFE in `<script>`; `'module'` emits `<script type="module">`                             |
+| `dropConsole`                       | `true`                      | Removes `console.*`. SignalRGB requires a clean console. Minifies the script even if `build.minify` is `false` |
+| `target`                            | `'es2020'`                  | Build target                                                                                                   |
 
 In the default classic mode, the build fails with an `[srgb-effect]` message on external imports (for example CDN URLs) and on top-level `await`. Set `script: 'module'` if you need either.
+
+Files in `public/` are not copied into the single-file effect, and the build warns when it finds any. Import assets from source instead so they get inlined.
 
 ## Utilities
 

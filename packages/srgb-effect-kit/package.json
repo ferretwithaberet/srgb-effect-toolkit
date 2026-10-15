@@ -3,10 +3,16 @@
   "version": "0.0.0",
   "description": "Vite plugin and utilities for building SignalRGB effects",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ferretwithaberet/srgb-effect-toolkit.git",
+    "directory": "packages/srgb-effect-kit"
+  },
   "type": "module",
   "files": [
     "dist",
-    "client.d.ts"
+    "client.d.ts",
+    "LICENSE"
   ],
   "exports": {
     ".": {
@@ -26,10 +32,11 @@
     "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsdown",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm build",
     "generate:reserved-globals": "node scripts/generate-reserved-globals.ts"
   },
   "peerDependencies": {
-    "vite": "^8.0.0"
+    "vite": "^8.3.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
