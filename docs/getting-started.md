@@ -150,7 +150,7 @@ Stop the dev server with Ctrl+C.
 pnpm build
 ```
 
-The build writes one self-contained file, `dist/my-effect.html`, named after the kebab-cased `title`. Scripts, styles and imported assets are inlined into it. [Build](build.md) describes the output and every build error.
+The build writes one self-contained file, `dist/my-effect.html`, named after the kebab-cased `title`. Scripts (one inline `<script type="module">` by default), styles and imported assets are inlined into it. [Build](build.md) describes the output and every build error.
 
 To install it, copy `dist/my-effect.html` into SignalRGB's effects folder:
 
@@ -165,6 +165,6 @@ Then restart SignalRGB. It picks up new effect files only at startup. Your effec
 - [Configuration](configuration.md): every control type and screen meter, and the validation rules.
 - [Globals](globals.md): property globals, change handlers, `engine` and `onCanvasApiEvent`.
 - [Runtime API](runtime-api.md): the loop, color, audio, screen-zone and meter helpers.
-- [Build](build.md): the build output, `script: 'module'`, and build errors.
+- [Build](build.md): the build output, the `script` modes (module by default), and build errors.
 - [SignalRGB notes](signalrgb-notes.md): renderers, frame rate and what is still unverified.
 - The [basic-2d](../examples/basic-2d) and [audio-visualizer](../examples/audio-visualizer) examples.

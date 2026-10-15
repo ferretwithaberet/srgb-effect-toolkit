@@ -19,9 +19,11 @@ export interface SrgbEffectOptions extends EffectManifest {
    */
   fileName?: string;
   /**
-   * `'classic'` bundles the effect as a strict-mode IIFE in a classic `<script>`. `'module'` emits
-   * `<script type="module">`, which allows external imports, top-level await and `import.meta`.
-   * @default 'classic'
+   * `'module'` (the default) emits one inline `<script type="module">`, which allows external
+   * imports, top-level await and `import.meta`. `'classic'` is opt-in for engines that cannot run
+   * module scripts: it bundles the effect as a strict-mode IIFE in a plain `<script>` and rejects
+   * those three features.
+   * @default 'module'
    */
   script?: 'classic' | 'module';
   /**
@@ -54,7 +56,7 @@ export function resolveOptions(options: SrgbEffectOptions): ResolvedOptions {
   const {
     typesFile = 'src/srgb-effect.d.ts',
     fileName,
-    script = 'classic',
+    script = 'module',
     dropConsole = true,
     target = 'es2020',
     devtools = true,

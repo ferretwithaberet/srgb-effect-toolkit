@@ -76,7 +76,7 @@ Copy `dist/my-effect.html` into `C:\Users\<username>\AppData\Local\VortxEngine\a
 - [Configuration](docs/configuration.md): every `srgbEffect()` option, the markup each control and meter generates, and the validation rules.
 - [Globals](docs/globals.md): property globals, `on<Prop>Changed` handlers, `engine` and `onCanvasApiEvent`, and how they are typed.
 - [Runtime API](docs/runtime-api.md): reference for the loop, color, audio, screen-zone, meter, renderer and boolean helpers.
-- [Build](docs/build.md): what `vite build` produces, `script: 'module'`, and every build error and warning.
+- [Build](docs/build.md): what `vite build` produces, the `script` modes (module by default), and every build error and warning.
 - [SignalRGB notes](docs/signalrgb-notes.md): renderers, frame rate, the visible area, and what is still unverified.
 
 ## Examples

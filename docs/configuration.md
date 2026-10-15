@@ -61,19 +61,19 @@ export const properties = [
 
 ## Options
 
-| Option        | Type                                         | Default                     | Meaning                                                                                                |
-| ------------- | -------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `title`       | `string`                                     | required                    | Effect name in SignalRGB, written as `<title>`. Also the source of the default `fileName`.             |
-| `description` | `string`                                     | none                        | Written as `<meta description="…" />`.                                                                 |
-| `publisher`   | `string`                                     | none                        | Written as `<meta publisher="…" />`.                                                                   |
-| `properties`  | `PropertyDef[]`                              | `[]`                        | User controls, in UI order. See [Properties](#properties).                                             |
-| `meters`      | `MeterDef[]`                                 | `[]`                        | Screen meters. See [Meters](#meters).                                                                  |
-| `typesFile`   | `string`                                     | `'src/srgb-effect.d.ts'`    | Where the generated globals typings are written, relative to the Vite root. See [Globals](globals.md). |
-| `fileName`    | `string`                                     | kebab-cased title + `.html` | Build output file name. See [Build](build.md#output-file-name).                                        |
-| `script`      | `'classic' \| 'module'`                      | `'classic'`                 | How the effect script is emitted. See [Build](build.md#script-classic-and-module).                     |
-| `dropConsole` | `boolean`                                    | `true`                      | Removes `console.*` and `debugger` from the build. See [Build](build.md#dropconsole-and-minification). |
-| `target`      | `string \| string[]`                         | `'es2020'`                  | Build target passed to Vite's `build.target`. Provisional until verified on SignalRGB.                 |
-| `devtools`    | `boolean \| { fireChangedOnLoad?: boolean }` | `true`                      | Dev-only devtools drawer. Not built yet; see below.                                                    |
+| Option        | Type                                         | Default                     | Meaning                                                                                                   |
+| ------------- | -------------------------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `title`       | `string`                                     | required                    | Effect name in SignalRGB, written as `<title>`. Also the source of the default `fileName`.                |
+| `description` | `string`                                     | none                        | Written as `<meta description="…" />`.                                                                    |
+| `publisher`   | `string`                                     | none                        | Written as `<meta publisher="…" />`.                                                                      |
+| `properties`  | `PropertyDef[]`                              | `[]`                        | User controls, in UI order. See [Properties](#properties).                                                |
+| `meters`      | `MeterDef[]`                                 | `[]`                        | Screen meters. See [Meters](#meters).                                                                     |
+| `typesFile`   | `string`                                     | `'src/srgb-effect.d.ts'`    | Where the generated globals typings are written, relative to the Vite root. See [Globals](globals.md).    |
+| `fileName`    | `string`                                     | kebab-cased title + `.html` | Build output file name. See [Build](build.md#output-file-name).                                           |
+| `script`      | `'classic' \| 'module'`                      | `'module'`                  | How the effect script is emitted; `'classic'` is opt-in. See [Build](build.md#script-classic-and-module). |
+| `dropConsole` | `boolean`                                    | `true`                      | Removes `console.*` and `debugger` from the build. See [Build](build.md#dropconsole-and-minification).    |
+| `target`      | `string \| string[]`                         | `'es2020'`                  | Build target passed to Vite's `build.target`. Provisional until verified on SignalRGB.                    |
+| `devtools`    | `boolean \| { fireChangedOnLoad?: boolean }` | `true`                      | Dev-only devtools drawer. Not built yet; see below.                                                       |
 
 The devtools drawer is planned but not built yet. It will simulate property controls, audio, screen zones, meters, canvas API events, renderers and frame rates, and mark the visible 320×200 area. `devtools` already accepts `true`, `false` or `{ fireChangedOnLoad }`. `fireChangedOnLoad` defaults to `true`; it will make the drawer call every `on<Prop>Changed` once at load, like SignalRGB does. Today the option has no effect.
 

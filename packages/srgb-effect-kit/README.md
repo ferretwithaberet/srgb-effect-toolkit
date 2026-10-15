@@ -70,7 +70,7 @@ Good to know:
 - [Configuration](https://github.com/ferretwithaberet/srgb-effect-toolkit/blob/main/docs/configuration.md): every option, the generated markup, and the validation rules.
 - [Globals](https://github.com/ferretwithaberet/srgb-effect-toolkit/blob/main/docs/globals.md): property globals, change handlers, `engine` and `onCanvasApiEvent`.
 - [Runtime API](https://github.com/ferretwithaberet/srgb-effect-toolkit/blob/main/docs/runtime-api.md): reference for every export of `srgb-effect-kit`.
-- [Build](https://github.com/ferretwithaberet/srgb-effect-toolkit/blob/main/docs/build.md): the build output, `script: 'module'`, and every build error and warning.
+- [Build](https://github.com/ferretwithaberet/srgb-effect-toolkit/blob/main/docs/build.md): the build output, the `script` modes (module by default), and every build error and warning.
 - [SignalRGB notes](https://github.com/ferretwithaberet/srgb-effect-toolkit/blob/main/docs/signalrgb-notes.md): renderers, frame rate, and what is still unverified.
 
 ## License

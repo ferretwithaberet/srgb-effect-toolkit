@@ -194,7 +194,7 @@ export default defineConfig({
   - `ResolutionDef`: either `{ size }` (template-literal type `"<W>x<H>"`, e.g. `'1920x1080'`) or `{ aspect }` (`"<W>:<H>"`, e.g. `'21:9'`), combined with an optional subset of `x`, `y`, `width`, `height`.
 - `typesFile?: string`. Default `src/srgb-effect.d.ts`.
 - `fileName?: string`. Default is the kebab-cased `title` plus `.html`.
-- `script?: 'classic' | 'module'`. Default `'classic'` (§8).
+- `script?: 'classic' | 'module'`. Default `'module'` (§8). Decision 2026-10-15: follow Vite conventions, since SignalRGB already loads butterchurn-srgb, which ships an inline `<script type="module">`; `'classic'` stays as opt-in.
 - `dropConsole?: boolean`. Default `true`.
 - `target?: string | string[]`. Default `'es2020'`, provisional until the probe (§9).
 - `devtools?: boolean | { fireChangedOnLoad?: boolean }`. Default `true`; applies in serve mode only. `fireChangedOnLoad` defaults to `true`, which mirrors SignalRGB's load-time calls (§3.2).
@@ -324,10 +324,10 @@ Then `generateBundle` (`enforce: 'post'`):
 1. Replaces `<script src>` and `<link rel="stylesheet">` with inline content.
 2. Deletes the now-inlined chunks and assets. `dist/` must contain exactly one HTML file; any remaining non-HTML output is a build error.
 3. **Script format:**
-   - By default (`script: 'classic'`), it wraps the bundle in an IIFE and emits a classic `<script>` at the end of `<body>`.
+   - By default (`script: 'module'`, decided 2026-10-15 to follow Vite conventions; SignalRGB already loads butterchurn-srgb, which ships an inline `<script type="module">`), it emits one inline `<script type="module">` at the end of `<body>`. Imports are bundled into it. Module scripts are already strict and module-scoped, so top-level declarations cannot collide with property globals, and the classic-only rejections below do not apply.
+   - With `script: 'classic'` (opt-in), it wraps the bundle in an IIFE and emits a classic `<script>` at the end of `<body>`.
      - The IIFE keeps top-level declarations from leaking into global scope and colliding with property globals.
      - It errors if the output contains `import.meta` (other than Vite-replaced `import.meta.env`), top-level `await`, `import` or `export`.
-   - With `script: 'module'`, it emits an inline `<script type="module">`.
 4. Prepends the §6 prelude to the bundle.
 5. **Final string pass:** injects the §5.3 head markup. String operations are required because of the non-void meter `<meta>` elements; an HTML parser would mangle them.
 

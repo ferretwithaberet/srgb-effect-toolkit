@@ -10,14 +10,14 @@ SignalRGB loads an effect from one HTML file, so the build emits exactly one: `d
 
 To get there, the plugin changes how Vite builds:
 
-- **Everything is inlined.** Imported images, fonts and other assets, including `url()` references in CSS, become `data:` URLs. Stylesheets are inlined as `<style>` where their `<link>` was. Scripts are inlined at the end of `<body>`.
+- **Everything is inlined.** Imported images, fonts and other assets, including `url()` references in CSS, become `data:` URLs. Stylesheets are inlined as `<style>` where their `<link>` was. Scripts are inlined at the end of `<body>`, as one inline `<script type="module">` by default.
 - **One script.** Code splitting is off, so dynamic `import()` calls are bundled into the main script instead of creating extra files. Vite's module preload helper is off too.
 - **No `public/` copy.** Files in `public/` are not copied, because only the HTML file reaches SignalRGB. The build warns when `public/` has files; see [below](#public-files-are-left-out).
 - **Generated `<head>`.** The `<title>` and `<meta>` tags from your options are inserted at the start of `<head>`, after a leading `<meta charset>` (browsers expect the charset first). If `index.html` has no `<head>`, one is created.
-- **A prelude script.** A small classic script runs before your code and creates every `on<Prop>Changed` global and `onCanvasApiEvent` that does not exist yet, set to `undefined`. That way a bare `onSpeedChanged = …` assignment does not throw in strict mode. See [Globals](globals.md#change-handlers-onpropchanged).
+- **A prelude script.** A small classic script (always a plain `<script>`, in both `script` modes) runs before your code and creates every `on<Prop>Changed` global and `onCanvasApiEvent` that does not exist yet, set to `undefined`. That way a bare `onSpeedChanged = …` assignment does not throw in strict mode. See [Globals](globals.md#change-handlers-onpropchanged).
 - **Your code at the end of `<body>`.** The bundled script follows the prelude, so the DOM above it, such as your canvas, exists when it runs. A `</script>` inside your code is escaped as `<\/script>` so it cannot end the tag early; the same applies to `</style>` in CSS.
 
-For the [getting-started](getting-started.md) project, `dist/my-effect.html` looks like this (the last script is shortened):
+For the [getting-started](getting-started.md) project, `dist/my-effect.html` looks like this with the default `script: 'module'` (the last script is shortened):
 
 <!-- prettier-ignore -->
 ```html
@@ -40,8 +40,8 @@ For the [getting-started](getting-started.md) project, `dist/my-effect.html` loo
 <script>
 (function(){var w=window,n=["onSpeedChanged","onModeChanged","onCanvasApiEvent"];for(var i=0;i<n.length;i++){if(!(n[i] in w))w[n[i]]=undefined;}})();
 </script>
-<script>
-"use strict";(function(){var e=(e,t,n,r)=>r===void 0?`hsl(${e}, ${t}%, ${n}%)`:…})();
+<script type="module">
+var e=(e,t,n,r)=>r===void 0?`hsl(${e}, ${t}%, ${n}%)`:…
 </script>
 </body>
 </html>
@@ -49,27 +49,38 @@ For the [getting-started](getting-started.md) project, `dist/my-effect.html` loo
 
 ## `script`: classic and module
 
-The `script` option controls how your bundled code is emitted.
+The `script` option controls how your bundled code is emitted. The default is `'module'`, which follows Vite's conventions. `'classic'` is opt-in.
 
-### `'classic'` (default)
+### `'module'` (default)
 
-Your code is bundled as an IIFE (`(function(){ … })();`) in a plain `<script>`, preceded by `"use strict";`. Strict mode keeps the semantics your code had as a module: assigning to an undeclared variable throws, and `this` at the top level is `undefined`.
+Your code is emitted as a single inline `<script type="module">` after the classic prelude. Imports are bundled into that one script, so the file stays self-contained. Module scripts are already strict and module-scoped: assigning to an undeclared variable throws, `this` at the top level is `undefined`, and top-level declarations do not leak into the global scope, so the toolkit adds no wrapper or `"use strict"`.
 
-Classic is the default because it is the most compatible form: whether SignalRGB's renderers run `type="module"` scripts is [not verified yet](signalrgb-notes.md#pending-verification-on-real-signalrgb).
+The toolkit's classic-only rejections do not apply. In module mode you can use top-level `await`, `import.meta` (such as `import.meta.url`) and imports of modules that are not bundled, such as a CDN URL.
 
-An IIFE cannot do three things a module can, so these fail the build in classic mode:
+SignalRGB is known to load inline module scripts: the butterchurn-srgb effect ships an inline `<script type="module">`. Still test your own effect with both renderers, since the renderers' exact JavaScript support is [not verified yet](signalrgb-notes.md#pending-verification-on-real-signalrgb).
+
+### `'classic'` (opt-in)
+
+```ts
+srgbEffect({ title: 'My Effect', script: 'classic' });
+```
+
+Your code is bundled as an IIFE (`(function(){ … })();`) in a plain `<script>`, preceded by `"use strict";`. Strict mode keeps the semantics your code had as a module: assigning to an undeclared variable throws, and `this` at the top level is `undefined`. Use classic for engines that cannot run module scripts. Its output looks like this instead of the module script above:
+
+<!-- prettier-ignore -->
+```html
+<script>
+"use strict";(function(){var e=(e,t,n,r)=>r===void 0?`hsl(${e}, ${t}%, ${n}%)`:…})();
+</script>
+```
+
+The trade-off: an IIFE cannot do three things a module can, so these fail the build in classic mode:
 
 - importing a module that is not bundled, such as a CDN URL;
 - top-level `await`;
 - `import.meta`, except `import.meta.env`, which Vite replaces with static values at build time.
 
-### `'module'`
-
-```ts
-srgbEffect({ title: 'My Effect', script: 'module' });
-```
-
-Your code is emitted as `<script type="module">`. Use it only when you need one of the three things above, for example a library you load from a URL at runtime or a top-level `await`. Test the result in SignalRGB with both renderers, since module support there is unverified. The prelude stays a classic script in both modes.
+The errors below, [external imports](#external-imports-in-classic-scripts), [top-level `await`](#top-level-await-in-classic-scripts) and [`import.meta`](#importmeta-in-classic-scripts), appear only with `script: 'classic'`.
 
 ## `dropConsole` and minification
 
@@ -143,7 +154,7 @@ Fix: delete these tags from `index.html` and set `title`, `description`, `publis
 [srgb-effect] classic scripts cannot import external modules (https://cdn.example/confetti.js). Bundle the dependency or set script: 'module'.
 ```
 
-Your code imports something the bundler cannot include, such as a URL. Fix: install the package with `pnpm add` and import it by name so it is bundled, or set `script: 'module'`.
+Your code imports something the bundler cannot include, such as a URL. Fix: install the package with `pnpm add` and import it by name so it is bundled, or remove `script: 'classic'`.
 
 ### Top-level `await` in classic scripts
 
@@ -151,7 +162,7 @@ Your code imports something the bundler cannot include, such as a URL. Fix: inst
 [srgb-effect] top-level await is not supported in classic scripts. Wrap it in an async function or set script: 'module'.
 ```
 
-Fix: move the code into an async function and call it, or set `script: 'module'`.
+Fix: move the code into an async function and call it, or remove `script: 'classic'`.
 
 ```ts
 async function init(): Promise<void> {
@@ -167,7 +178,7 @@ void init();
 [srgb-effect] /path/to/my-effect/src/main.ts uses import.meta, which is unavailable in classic scripts. Remove it (import.meta.env is fine) or set script: 'module'.
 ```
 
-Common causes are `import.meta.url` and `new URL('./file', import.meta.url)`. Fix: import the asset instead (`import url from './file.png'`), which Vite inlines, or set `script: 'module'`.
+Common causes are `import.meta.url` and `new URL('./file', import.meta.url)`. Fix: import the asset instead (`import url from './file.png'`), which Vite inlines, or remove `script: 'classic'`.
 
 ### Files that could not be inlined
 

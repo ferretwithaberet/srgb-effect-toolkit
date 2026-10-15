@@ -7,11 +7,16 @@ describe('resolveOptions', () => {
       manifest: { title: 'Hue Cycle', publisher: 'me' },
       typesFile: 'src/srgb-effect.d.ts',
       fileName: 'hue-cycle.html',
-      script: 'classic',
+      script: 'module',
       dropConsole: true,
       target: 'es2020',
       devtools: { fireChangedOnLoad: true },
     });
+  });
+
+  it('defaults script to module', () => {
+    expect(resolveOptions({ title: 'X' }).script).toBe('module');
+    expect(resolveOptions({ title: 'X', script: 'classic' }).script).toBe('classic');
   });
 
   it('respects overrides', () => {
@@ -19,7 +24,7 @@ describe('resolveOptions', () => {
       title: 'X',
       typesFile: 'types/effect.d.ts',
       fileName: 'custom.html',
-      script: 'module',
+      script: 'classic',
       dropConsole: false,
       target: ['chrome100', 'safari15'],
       devtools: { fireChangedOnLoad: false },
@@ -27,7 +32,7 @@ describe('resolveOptions', () => {
     expect(resolved).toMatchObject({
       typesFile: 'types/effect.d.ts',
       fileName: 'custom.html',
-      script: 'module',
+      script: 'classic',
       dropConsole: false,
       target: ['chrome100', 'safari15'],
       devtools: { fireChangedOnLoad: false },

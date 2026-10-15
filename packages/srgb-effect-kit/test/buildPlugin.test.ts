@@ -37,6 +37,8 @@ const project = (main: string, html?: string) =>
     'src/main.ts': main,
   });
 
+const classic: Partial<SrgbEffectOptions> = { script: 'classic' };
+
 const buildOnly = async (root: string, opts: Partial<SrgbEffectOptions> = {}, base?: string) => {
   const { files, warnings } = await buildFixture(root, {
     base,
@@ -64,7 +66,7 @@ describe('srgbEffect build', () => {
   });
 
   it('places the prelude then an IIFE classic script at the end of body', async () => {
-    const { html } = await buildOnly(project('document.title = "x";'));
+    const { html } = await buildOnly(project('document.title = "x";'), classic);
     const body = html.slice(html.indexOf('<canvas'));
     expect(body).toMatch(
       /^<canvas[^>]*><\/canvas>\n<script>\n\(function\(\)\{var w=window,n=\["onSpeedChanged","onCanvasApiEvent"\]/,
@@ -75,7 +77,7 @@ describe('srgbEffect build', () => {
   });
 
   it('runs classic scripts in strict mode, like modules', async () => {
-    const { html } = await buildOnly(project('document.title = "x";'));
+    const { html } = await buildOnly(project('document.title = "x";'), classic);
     const body = html.slice(html.indexOf('<canvas'));
     const effect = body.slice(body.indexOf('</script>') + '</script>'.length);
     // Rolldown emits the directive just before the IIFE; the script holds nothing else, so the
@@ -90,19 +92,35 @@ describe('srgbEffect build', () => {
     expect((await buildOnly(project(main), { dropConsole: false })).html).toContain('noisy');
   });
 
+  it('emits a module script by default, after the classic prelude', async () => {
+    const { html } = await buildOnly(project('document.title = "x";'));
+    const body = html.slice(html.indexOf('<canvas'));
+    expect(body).toMatch(
+      /^<canvas[^>]*><\/canvas>\n<script>\n\(function\(\)\{var w=window,n=\["onSpeedChanged","onCanvasApiEvent"\]/,
+    );
+    expect(body).toMatch(/<\/script>\n<script type="module">\n/);
+    expect(html.match(/<script type="module">/g)).toHaveLength(1);
+    expect(html.trimEnd()).toMatch(/<\/script>\n<\/body><\/html>$/);
+  });
+
   it('emits a module script when script is "module"', async () => {
     const { html } = await buildOnly(project('document.title = "x";'), { script: 'module' });
     expect(html).toContain('<script type="module">');
   });
 
+  it('allows import.meta in module scripts', async () => {
+    const { html } = await buildOnly(project('document.title = import.meta.url;'));
+    expect(html).toContain('import.meta.url');
+  });
+
   it('rejects import.meta in classic scripts', async () => {
-    await expect(buildOnly(project('document.title = import.meta.url;'))).rejects.toThrow(
+    await expect(buildOnly(project('document.title = import.meta.url;'), classic)).rejects.toThrow(
       /uses import\.meta/,
     );
   });
 
   it('allows import.meta.env, which Vite replaces statically', async () => {
-    const { html } = await buildOnly(project('document.title = import.meta.env.MODE;'));
+    const { html } = await buildOnly(project('document.title = import.meta.env.MODE;'), classic);
     expect(html).toContain('production');
   });
 
@@ -112,16 +130,18 @@ describe('srgbEffect build', () => {
       'main.ts': 'import("./lazy").then((m) => { document.title = m.value; });',
       'lazy.ts': 'export const value = "lazy";',
     });
-    const { files, html } = await buildOnly(root);
+    const { files, html } = await buildOnly(root, classic);
     expect([...files.keys()]).toEqual(['build-test.html']);
     expect(html).toContain('lazy');
     expect(html).not.toContain('import.meta');
   });
 
   it('escapes closing tags inside inlined code', async () => {
-    const { html } = await buildOnly(project('document.title = "</script><b>";'));
-    expect(html).toContain('<\\/script><b>');
-    expect(html.match(/<\/script>/g)).toHaveLength(2);
+    for (const opts of [classic, { script: 'module' as const }]) {
+      const { html } = await buildOnly(project('document.title = "</script><b>";'), opts);
+      expect(html).toContain('<\\/script><b>');
+      expect(html.match(/<\/script>/g)).toHaveLength(2);
+    }
   });
 
   it('resolves assets with a relative base', async () => {
@@ -139,7 +159,7 @@ describe('srgbEffect build', () => {
       'document.title = "x";',
       '<body><canvas></canvas><script type="module" src="/src/main.ts"></script></body>',
     );
-    const { html } = await buildOnly(root);
+    const { html } = await buildOnly(root, classic);
     expect(html.indexOf('<title>Build Test</title>')).toBeLessThan(html.indexOf('<body'));
     expect(html).toMatch(/<script>\n"use strict";\(function\(\)/);
   });
@@ -152,7 +172,7 @@ describe('srgbEffect build', () => {
   });
   it('rejects external side-effect imports in classic scripts', async () => {
     const main = 'import "https://cdn.example/x.js"; document.title = "x";';
-    await expect(buildOnly(project(main))).rejects.toThrow(
+    await expect(buildOnly(project(main), classic)).rejects.toThrow(
       /\[srgb-effect\] classic scripts cannot import external modules/,
     );
   });
@@ -160,19 +180,21 @@ describe('srgbEffect build', () => {
   it('rejects external named imports in classic scripts', async () => {
     const main =
       'import { thing } from "https://cdn.example/x.js"; document.title = String(thing);';
-    await expect(buildOnly(project(main))).rejects.toThrow(
+    await expect(buildOnly(project(main), classic)).rejects.toThrow(
       /\[srgb-effect\] classic scripts cannot import external modules/,
     );
   });
 
   it('rejects top-level await in classic scripts', async () => {
     const main = 'await Promise.resolve(); document.title = "x";';
-    await expect(buildOnly(project(main))).rejects.toThrow(/\[srgb-effect\] top-level await/);
+    await expect(buildOnly(project(main), classic)).rejects.toThrow(
+      /\[srgb-effect\] top-level await/,
+    );
   });
 
-  it('allows top-level await in module scripts', async () => {
+  it('allows top-level await in module scripts, the default', async () => {
     const main = 'await Promise.resolve(); document.title = "x";';
-    const { html } = await buildOnly(project(main), { script: 'module' });
+    const { html } = await buildOnly(project(main));
     expect(html).toContain('<script type="module">');
   });
 
