@@ -17,8 +17,10 @@ Create a Vite project first, then add the package:
 pnpm create vite my-effect --template vanilla-ts
 cd my-effect
 pnpm install
-pnpm add -D srgb-effect-kit
+pnpm add srgb-effect-kit
 ```
+
+It is a regular dependency because effect code imports the runtime from `src/`, which lint rules such as airbnb's `import-x/no-extraneous-dependencies` flag for devDependencies. `-D` also works if your lint setup allows it.
 
 ## Usage
 
@@ -62,7 +64,7 @@ Good to know:
 - The plugin writes `src/srgb-effect.d.ts`, which types your globals, on every `vite` and `vite build`. Do not commit it: add it to `.gitignore` (Prettier respects `.gitignore`). Because the file does not exist on a fresh clone, change the template's `"build": "tsc && vite build"` to `"build": "vite build && tsc"`; running `pnpm dev` once also generates it for your editor.
 - The dev server does not define SignalRGB's globals yet; a dev-only devtools drawer that simulates them is planned. Until then, reading a property global or making a bare `onSpeedChanged = …` assignment throws a `ReferenceError` in the browser. Both work inside SignalRGB.
 - Assign change handlers to `window` (`window.onSpeedChanged = () => {}`). A top-level `function onSpeedChanged() {}` is module-scoped and never called; the plugin warns about it.
-- `dropConsole` (default `true`) strips `console.*` for SignalRGB's clean-console requirement, and minifies the script even when `build.minify` is `false`.
+- `dropConsole` (default `true`) strips `console.*` for SignalRGB's clean-console requirement, and minifies the script even when `build.minify` is `false`. It also strips third-party libraries' `console.*` calls, so set `dropConsole: false` to debug a production build.
 
 ## Documentation
 

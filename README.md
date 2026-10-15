@@ -17,8 +17,10 @@ pnpm install
 Then add the toolkit:
 
 ```sh
-pnpm add -D srgb-effect-kit
+pnpm add srgb-effect-kit
 ```
+
+It is a regular dependency because effect code imports the runtime from `src/`, which lint rules such as airbnb's `import-x/no-extraneous-dependencies` flag for devDependencies. `-D` also works if your lint setup allows it.
 
 ## Quick start
 

@@ -19,10 +19,10 @@ If create-vite asks "Install with pnpm and start now?", choose No. You install t
 ## 2. Add srgb-effect-kit
 
 ```sh
-pnpm add -D srgb-effect-kit
+pnpm add srgb-effect-kit
 ```
 
-It is a dev dependency: the plugin runs at build time, and the few runtime helpers you import get bundled into the effect.
+Add it as a regular dependency: your effect code imports the runtime helpers from `src/`, and lint rules such as airbnb's `import-x/no-extraneous-dependencies` flag imports of devDependencies there. The plugin itself only runs at build time, and the helpers you import get bundled into the effect. `pnpm add -D srgb-effect-kit` also works if your lint setup allows it.
 
 ## 3. Create `vite.config.ts`
 

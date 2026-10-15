@@ -84,7 +84,7 @@ The errors below, [external imports](#external-imports-in-classic-scripts), [top
 
 ## `dropConsole` and minification
 
-SignalRGB's testing requirements ask for a clean console: an effect should log nothing besides SignalRGB's own "Loading Effect". With `dropConsole: true`, the default, the build removes every `console.*` call and `debugger` statement, so you can keep debug logging in your source.
+SignalRGB's testing requirements ask for a clean console: an effect should log nothing besides SignalRGB's own "Loading Effect". With `dropConsole: true`, the default, the build removes every `console.*` call and `debugger` statement, so you can keep debug logging in your source. This also strips `console.*` calls inside third-party libraries you bundle, so to debug a production build, set `dropConsole: false`.
 
 The removal is done by the minifier, so `dropConsole: true` also minifies the script, even if you set `build.minify: false`. To get unminified output, for example to read the bundle, set both:
 
