@@ -49,7 +49,7 @@ Behaviour:
 - **Invalid caps.** A `maxFps` that is not a finite number above 0 (for example `0`, a negative number or `NaN`) disables the cap instead of throwing.
 - **Errors.** The next frame is requested before `frame` runs, so the loop keeps running if `frame` throws.
 
-On SignalRGB, how often frames are rendered depends on the renderer and the user's FPS setting, which effects cannot read. See [SignalRGB notes](signalrgb-notes.md#frame-rate).
+On SignalRGB, how often frames are rendered depends on the renderer and the user's FPS setting, which effects are not known to receive. See [SignalRGB notes](signalrgb-notes.md#frame-rate).
 
 ### `Loop`
 

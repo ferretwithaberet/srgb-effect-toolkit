@@ -13,6 +13,52 @@ export default defineConfig({
 });
 ```
 
+## `srgbEffect()`
+
+```ts
+function srgbEffect<const P extends readonly PropertyDef[] = readonly []>(
+  options: Omit<SrgbEffectOptions, 'properties'> & { properties?: CheckedProperties<P> },
+): Plugin[];
+```
+
+`srgbEffect()` validates `options` (see [Validation](#validation)) and returns three Vite plugins. Put the returned array in Vite's `plugins` array as is; Vite flattens it.
+
+- `srgb-effect:core` writes the [generated types file](globals.md#how-the-typing-works), injects the generated `<head>` markup in `pnpm dev`, and rejects hand-written `<title>` and SignalRGB `<meta>` tags.
+- `srgb-effect:build` runs only during `vite build` and produces the [single-file effect](build.md#what-the-build-produces).
+- `srgb-effect:module-scope-check` warns about [module-scoped change handlers](globals.md#do-not-declare-handlers-at-module-scope).
+
+The `const` type parameter makes TypeScript infer the `properties` array with its literal values, such as `['Wave', 'Solid']` rather than `string[]`. `CheckedProperties<P>` uses those literals to [check each list `default` at compile time](#compile-time-check-for-list-defaults).
+
+### Types exported from `srgb-effect-kit/vite`
+
+Import these with `import type { … } from 'srgb-effect-kit/vite'`:
+
+- `SrgbEffectOptions`: the options object, that is `EffectManifest` plus the plugin settings in the table below.
+- `DevtoolsOptions`: the object form of the `devtools` option, `{ fireChangedOnLoad?: boolean }`.
+- `ResolvedOptions`: the options after defaults are applied, split into `manifest` and the plugin settings.
+- `CheckedProperties<P>`: the `properties` type that turns a list `default` outside its `values` into a type error.
+- `EffectManifest`: `title`, `description`, `publisher`, `properties` and `meters`.
+- `PropertyDef`: union of the six property interfaces below.
+- `PropertyType`: `'number' | 'hue' | 'boolean' | 'color' | 'textfield' | 'list'`.
+- `NumberProperty`, `HueProperty`, `BooleanProperty`, `ColorProperty`, `TextfieldProperty`, `ListProperty`: one per [control type](#properties).
+- `MeterDef`: union of the four meter interfaces below.
+- `MeterType`: `'linear' | 'area' | 'ocr_textmatch' | 'ocr_numeric'`.
+- `LinearMeter`, `AreaMeter`, `OcrTextMatchMeter`, `OcrNumericMeter`: one per [meter type](#meters).
+- `ResolutionDef`: one entry of a meter's [`resolutions`](#resolutions).
+- `HslRanges`: the `h`, `s` and `l` ranges of `linear` and `area` meters, also used for `hdr`.
+- `Range`: an inclusive `[min, max]` pair, written as `"min-max"`.
+
+For example, to keep the properties in their own module without losing the list check, mark the array `as const`:
+
+```ts
+import type { PropertyDef } from 'srgb-effect-kit/vite';
+
+export const properties = [
+  { property: 'speed', type: 'number', label: 'Speed', min: 0, max: 100, default: 50 },
+  { property: 'mode', type: 'list', label: 'Mode', values: ['Wave', 'Solid'], default: 'Wave' },
+] as const satisfies readonly PropertyDef[];
+```
+
 ## Options
 
 | Option        | Type                                         | Default                     | Meaning                                                                                                |
@@ -198,7 +244,7 @@ vite.config.ts(14,11): error TS2322: Type '"list"' is not assignable to type 'ne
 …
 ```
 
-Your editor shows this error. The template's `tsc` only checks `src`, so add `vite.config.ts` to the `include` array in `tsconfig.json` if you want `pnpm build` to catch it too. If you declare the array in a separate, non-`as const` variable, TypeScript cannot see the literal values and skips the check. The runtime validation still reports `default "…" is not one of values` when Vite loads the config.
+Your editor shows this error. The template's `tsc` only checks `src`, so add `vite.config.ts` to the `include` array in `tsconfig.json` if you want `pnpm build` to catch it too. The check also works for an array declared elsewhere with `as const`, as [shown above](#types-exported-from-srgb-effect-kitvite), and then reports `Type '"Pulse"' is not assignable to type '"Wave" | "Solid"'` on the call. Without `as const`, TypeScript cannot see the literal values and skips the check. The runtime validation still reports `default "…" is not one of values` when Vite loads the config.
 
 ## Meters
 
@@ -393,28 +439,28 @@ The prefix is `properties[i] ("name")` or `meters[i] ("name")`, or just `propert
 
 ### Property rules
 
-| Rule                                                                                                                                                      | Message                                                                                        |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Each entry is an object                                                                                                                                   | `must be an object`                                                                            |
-| `property` is a string                                                                                                                                    | `property must be a string`                                                                    |
-| `property` is a valid JavaScript identifier (letters, digits, `_` and `$`, not starting with a digit) and not a reserved word such as `class` or `delete` | `property must be a valid JavaScript identifier`                                               |
-| Names are unique                                                                                                                                          | `duplicate property name`                                                                      |
-| `property` is not a browser global (for example `name`, `status`, `top`, `length`, `close`, `event`) or a SignalRGB global (`engine`, `onCanvasApiEvent`) | `"<property>" collides with a built-in global; SignalRGB injects properties as window globals` |
-| Two properties do not share a change handler (for example `speed` and `Speed`)                                                                            | `change handler <handler> collides with property "<other>"`                                    |
-| `label` is a non-empty string                                                                                                                             | `label must be a string`, `label must not be empty`                                            |
-| `type` is one of the six types                                                                                                                            | `unknown type <type>`                                                                          |
-| `tooltip` is a string if set                                                                                                                              | `tooltip must be a string`                                                                     |
-| `number`: `min`, `max`, `default` are whole numbers                                                                                                       | `min, max and default must be whole numbers`                                                   |
-| `number`: `min ≤ default ≤ max`                                                                                                                           | `must satisfy min ≤ default ≤ max (got <min> ≤ <default> ≤ <max>)`                             |
-| `hue`: `default`, `min`, `max` are numbers                                                                                                                | `default must be a number`, `min and max must be numbers`                                      |
-| `hue`: `0 ≤ min ≤ default ≤ max ≤ 360`                                                                                                                    | `must satisfy 0 ≤ min ≤ default ≤ max ≤ 360 (got <min>, <default>, <max>)`                     |
-| `boolean`: `default` is a boolean                                                                                                                         | `default must be a boolean`                                                                    |
-| `color`: `default` is `#rrggbb` (six hex digits, any case)                                                                                                | `default must be a #rrggbb hex color (got "<default>")`                                        |
-| `textfield`: `default` is a string                                                                                                                        | `default must be a string`                                                                     |
-| `list`: `values` is a non-empty array of strings                                                                                                          | `values must be an array of strings`, `values must not be empty`                               |
-| `list`: values are unique                                                                                                                                 | `duplicate value "<value>"`                                                                    |
-| `list`: values contain no commas                                                                                                                          | `value "<value>" must not contain commas (SignalRGB separates values with commas)`             |
-| `list`: `default` is one of `values`                                                                                                                      | `default must be a string`, `default "<default>" is not one of values`                         |
+| Rule                                                                                                                                                              | Message                                                                                        |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Each entry is an object                                                                                                                                           | `must be an object`                                                                            |
+| `property` is a string                                                                                                                                            | `property must be a string`                                                                    |
+| `property` is a valid JavaScript identifier (ASCII letters, digits, `_` and `$`; must not start with a digit) and not a reserved word such as `class` or `delete` | `property must be a valid JavaScript identifier`                                               |
+| Names are unique                                                                                                                                                  | `duplicate property name`                                                                      |
+| `property` is not a browser global (for example `name`, `status`, `top`, `length`, `close`, `event`) or a SignalRGB global (`engine`, `onCanvasApiEvent`)         | `"<property>" collides with a built-in global; SignalRGB injects properties as window globals` |
+| Two properties do not share a change handler (for example `speed` and `Speed`)                                                                                    | `change handler <handler> collides with property "<other>"`                                    |
+| `label` is a non-empty string                                                                                                                                     | `label must be a string`, `label must not be empty`                                            |
+| `type` is one of the six types                                                                                                                                    | `unknown type <type>`                                                                          |
+| `tooltip` is a string if set                                                                                                                                      | `tooltip must be a string`                                                                     |
+| `number`: `min`, `max`, `default` are whole numbers                                                                                                               | `min, max and default must be whole numbers`                                                   |
+| `number`: `min ≤ default ≤ max`                                                                                                                                   | `must satisfy min ≤ default ≤ max (got <min> ≤ <default> ≤ <max>)`                             |
+| `hue`: `default`, `min`, `max` are numbers                                                                                                                        | `default must be a number`, `min and max must be numbers`                                      |
+| `hue`: `0 ≤ min ≤ default ≤ max ≤ 360`                                                                                                                            | `must satisfy 0 ≤ min ≤ default ≤ max ≤ 360 (got <min>, <default>, <max>)`                     |
+| `boolean`: `default` is a boolean                                                                                                                                 | `default must be a boolean`                                                                    |
+| `color`: `default` is `#rrggbb` (six hex digits, any case)                                                                                                        | `default must be a #rrggbb hex color (got "<default>")`                                        |
+| `textfield`: `default` is a string                                                                                                                                | `default must be a string`                                                                     |
+| `list`: `values` is a non-empty array of strings                                                                                                                  | `values must be an array of strings`, `values must not be empty`                               |
+| `list`: values are unique                                                                                                                                         | `duplicate value "<value>"`                                                                    |
+| `list`: values contain no commas                                                                                                                                  | `value "<value>" must not contain commas (SignalRGB separates values with commas)`             |
+| `list`: `default` is one of `values`                                                                                                                              | `default must be a string`, `default "<default>" is not one of values`                         |
 
 The browser-global list comes from TypeScript's DOM and ES library declarations. Meter names are not checked against it, because meters live on `engine.vision`, not on `window`.
 
@@ -423,7 +469,7 @@ The browser-global list comes from TypeScript's DOM and ES library declarations.
 | Rule                                                                         | Message                                                                                                                                   |
 | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | Each entry is an object                                                      | `must be an object`                                                                                                                       |
-| `meter` is a string and a valid JavaScript identifier                        | `meter must be a string`, `meter must be a valid JavaScript identifier`                                                                   |
+| `meter` is a string and a valid identifier, by the same rule as `property`   | `meter must be a string`, `meter must be a valid JavaScript identifier`                                                                   |
 | Names are unique                                                             | `duplicate meter name`                                                                                                                    |
 | `type` is one of the four types                                              | `unknown type <type>`                                                                                                                     |
 | `x`, `y`, `width`, `height` are finite numbers                               | `<field> must be a finite number (got <value>)`                                                                                           |

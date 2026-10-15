@@ -26,7 +26,7 @@ export {};
 - With meters, the file also adds one `number` key per meter to the `SRGBVision` interface, which types `engine.vision`.
 - The `/// <reference types="srgb-effect-kit/client" />` line brings SignalRGB's own globals into scope: `engine`, `onCanvasApiEvent`, and the `SRGBBoolean` and `SRGBVision` types.
 
-For this to work:
+For the generated file to work:
 
 - **Keep the file inside your tsconfig `include`.** The Vite template's `"include": ["src"]` already covers it. If you change `typesFile`, which is relative to the Vite root, make sure the new path is included too.
 - **Commit it.** Without it, `tsc` and your editor do not know the globals until Vite runs once. The plugin writes it only when its content changes.
@@ -35,6 +35,28 @@ For this to work:
   ```text
   src/srgb-effect.d.ts
   ```
+
+### `srgb-effect-kit/client`
+
+`srgb-effect-kit/client` is a types-only subpath: it has no JavaScript, only the global declarations of `engine`, `onCanvasApiEvent`, `SRGBBoolean` and `SRGBVision`. You normally reach it through the generated file. If you want SignalRGB's globals typed without the generated file, for example in a project that doesn't use the plugin, use either of these:
+
+- add the reference line to any `.d.ts` file inside your tsconfig `include`:
+
+  ```ts
+  /// <reference types="srgb-effect-kit/client" />
+  ```
+
+- or add it to `types` in `tsconfig.json`, next to the template's `vite/client`:
+
+  ```json
+  {
+    "compilerOptions": {
+      "types": ["vite/client", "srgb-effect-kit/client"]
+    }
+  }
+  ```
+
+Either way you get `engine`, `onCanvasApiEvent`, `SRGBBoolean` and `SRGBVision`, but not your property globals or their handlers, which only the generated file declares.
 
 ## Property globals
 
@@ -55,6 +77,8 @@ The type of each global depends on the control type:
 | `color`      | `string`                     | `'#009bde'`   |
 | `textfield`  | `string`                     | `'Hello'`     |
 | `list`       | union of `values`            | `'Wave'`      |
+
+The `color` and `list` types are what the toolkit declares; the raw runtime values are [pending verification](signalrgb-notes.md#pending-verification-on-real-signalrgb).
 
 ### Booleans
 
@@ -78,7 +102,7 @@ For each property, SignalRGB calls a global function named `on` + the property n
 | `baseHue` | `onBaseHueChanged` |
 | `RGBMode` | `onRGBModeChanged` |
 
-SignalRGB calls the handler once when the effect loads, and again every time the user changes the value. The exact order of the load-time calls is [not verified yet](signalrgb-notes.md#pending-verification-on-real-signalrgb). It passes no arguments: read the property global inside the handler. Handlers are optional; define one only when a change needs extra work, such as resetting state or rebuilding a cached value.
+SignalRGB calls the handler once when the effect loads, and again every time the user changes the value. The exact order of the load-time calls is [not verified yet](signalrgb-notes.md#pending-verification-on-real-signalrgb). It passes no arguments (as typed; [pending verification](signalrgb-notes.md#pending-verification-on-real-signalrgb)): read the property global inside the handler. Handlers are optional; define one only when a change needs extra work, such as resetting state or rebuilding a cached value.
 
 Assign the handler to `window`:
 
@@ -175,7 +199,7 @@ window.onCanvasApiEvent = ({ sender, event }) => {
 };
 ```
 
-The handler receives a `CanvasApiEvent`, `{ sender: string; event: string }`, built from the query parameters of a `POST` request to `http://localhost:16034/canvas/event`. To try it, run this on the machine running SignalRGB:
+The handler receives a `CanvasApiEvent`, `{ sender: string; event: string }` (as typed; [pending verification](signalrgb-notes.md#pending-verification-on-real-signalrgb)), built from the query parameters of a `POST` request to `http://localhost:16034/canvas/event`. To try it, run this on the machine running SignalRGB:
 
 ```sh
 curl -X POST "http://localhost:16034/canvas/event?sender=my-app&event=hit"
