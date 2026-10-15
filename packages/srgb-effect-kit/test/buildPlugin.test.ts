@@ -67,9 +67,19 @@ describe('srgbEffect build', () => {
     expect(body).toMatch(
       /^<canvas[^>]*><\/canvas>\n<script>\n\(function\(\)\{var w=window,n=\["onSpeedChanged","onCanvasApiEvent"\]/,
     );
-    expect(body).toMatch(/<\/script>\n<script>\n\(function\(\)/);
+    expect(body).toMatch(/<\/script>\n<script>\n"use strict";\(function\(\)/);
     expect(html).not.toContain('type="module"');
     expect(html.trimEnd()).toMatch(/<\/script>\n<\/body><\/html>$/);
+  });
+
+  it('runs classic scripts in strict mode, like modules', async () => {
+    const { html } = await buildOnly(project('document.title = "x";'));
+    const body = html.slice(html.indexOf('<canvas'));
+    const effect = body.slice(body.indexOf('</script>') + '</script>'.length);
+    // Rolldown emits the directive just before the IIFE; the script holds nothing else, so the
+    // whole effect is strict while the separate prelude script stays sloppy.
+    expect(effect).toMatch(/^\n<script>\n["']use strict["'];\(function\(\)\{/);
+    expect(body).toMatch(/^<canvas[^>]*><\/canvas>\n<script>\n\(function\(\)\{var w=window/);
   });
 
   it('drops console calls by default and keeps them when disabled', async () => {
@@ -129,7 +139,7 @@ describe('srgbEffect build', () => {
     );
     const { html } = await buildOnly(root);
     expect(html.indexOf('<title>Build Test</title>')).toBeLessThan(html.indexOf('<body'));
-    expect(html).toMatch(/<script>\n\(function\(\)/);
+    expect(html).toMatch(/<script>\n"use strict";\(function\(\)/);
   });
 
   it('uses the fileName option', async () => {

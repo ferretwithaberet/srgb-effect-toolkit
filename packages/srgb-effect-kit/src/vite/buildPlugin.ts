@@ -22,7 +22,8 @@ export function buildPlugin(options: ResolvedOptions): Plugin {
           rolldownOptions: {
             output: {
               codeSplitting: false,
-              ...(options.script === 'classic' ? { format: 'iife' as const } : {}),
+              // Classic scripts get the same strict semantics as the module script they replace.
+              ...(options.script === 'classic' ? { format: 'iife' as const, strict: true } : {}),
               ...(options.dropConsole
                 ? { minify: { compress: { dropConsole: true, dropDebugger: true } } }
                 : {}),
