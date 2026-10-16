@@ -65,7 +65,9 @@ declare global {
 
   /**
    * Injected by SignalRGB: audio, screen zones and meter values. Undefined outside SignalRGB until
-   * devtools mock it, so guard it (`globalThis.engine?.audio`) in code that also runs in a browser.
+   * devtools mock it, so guard it (`typeof engine !== 'undefined'`) in code that also runs in a
+   * browser. `globalThis.engine` is not enough: SignalRGB's examples read it as a bare identifier,
+   * which also covers an `engine` declared with `let` or `const`.
    */
   var engine: SRGBEngine;
   /**

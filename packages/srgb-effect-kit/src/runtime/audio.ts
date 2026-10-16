@@ -1,4 +1,5 @@
 import type { EngineAudio } from './globals';
+import { getEngine } from './engine';
 
 /** Number of frequency bands in `engine.audio.freq` and in `getFrequencies()`'s result. */
 export const FREQUENCY_BINS = 200;
@@ -15,9 +16,7 @@ export const SILENCE_SUM_THRESHOLD = 50;
  *
  * @param audio - Defaults to `engine.audio`, or `undefined` outside SignalRGB (silent).
  */
-export function isSilent(
-  audio: Partial<EngineAudio> | undefined = globalThis.engine?.audio,
-): boolean {
+export function isSilent(audio: Partial<EngineAudio> | undefined = getEngine()?.audio): boolean {
   if (!audio) return true;
   if (audio.level !== undefined && audio.level <= -100) return true;
   const { freq } = audio;
@@ -39,7 +38,7 @@ export function isSilent(
  * @param audio - Defaults to `engine.audio`. Without audio data, returns 200 zeros.
  */
 export function getFrequencies(
-  audio: Partial<EngineAudio> | undefined = globalThis.engine?.audio,
+  audio: Partial<EngineAudio> | undefined = getEngine()?.audio,
 ): number[] {
   const freq = audio?.freq;
   const out = new Array<number>(FREQUENCY_BINS).fill(0);

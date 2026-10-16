@@ -141,13 +141,15 @@ SignalRGB injects `engine`, typed `SRGBEngine`. Read it as `engine` or `window.e
 const loudness = engine.audio.level;
 ```
 
-SignalRGB injects `engine`, and in `pnpm dev` the [devtools](devtools.md) provide a mock. A built effect opened in a plain browser has no `engine`, so in code that must also run there, guard it with `globalThis.engine?.…`:
+SignalRGB injects `engine`, and in `pnpm dev` the [devtools](devtools.md) provide a mock. A built effect opened in a plain browser has no `engine`, so in code that must also run there, guard it with `typeof`:
 
 ```ts
-const level = globalThis.engine?.audio.level ?? -100;
+const level = typeof engine !== 'undefined' ? engine.audio.level : -100;
 ```
 
-The [runtime helpers](runtime-api.md) for audio and screen zones already default to `globalThis.engine` with this guard.
+Don't use `globalThis.engine?.…` for this. SignalRGB's own examples read `engine` as a bare identifier, which also finds an `engine` declared with `let` or `const`; such a global is not a property of `globalThis`, so `globalThis.engine` would read as missing.
+
+The [runtime helpers](runtime-api.md) for audio and screen zones already default to `engine` with this guard.
 
 ### `engine.audio`
 

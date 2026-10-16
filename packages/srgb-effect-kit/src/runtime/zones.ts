@@ -1,4 +1,5 @@
 import type { EngineZone } from './globals';
+import { getEngine } from './engine';
 
 /** Columns in SignalRGB's screen-zone grid. */
 export const ZONE_COLUMNS = 28;
@@ -30,7 +31,7 @@ const read = (zone: Partial<EngineZone> | undefined, index: number): ZoneColor =
 export function getZone(
   x: number,
   y: number,
-  zone: Partial<EngineZone> | undefined = globalThis.engine?.zone,
+  zone: Partial<EngineZone> | undefined = getEngine()?.zone,
 ): ZoneColor {
   if (
     !Number.isInteger(x) ||
@@ -52,8 +53,6 @@ export function getZone(
  *
  * @param zone - Defaults to `engine.zone`.
  */
-export function getZones(
-  zone: Partial<EngineZone> | undefined = globalThis.engine?.zone,
-): ZoneColor[] {
+export function getZones(zone: Partial<EngineZone> | undefined = getEngine()?.zone): ZoneColor[] {
   return Array.from({ length: ZONE_COLUMNS * ZONE_ROWS }, (_, index) => read(zone, index));
 }
